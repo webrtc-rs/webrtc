@@ -19,17 +19,18 @@ use crate::peer_connection::transports::{
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{
-    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, RecvMeta, Sender,
-    Transmit, TrySendError, channel,
+    AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, RecvMeta, Sender, Transmit,
+    TrySendError, channel,
 };
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 use rtc::ice::candidate::Candidate;
+use rtc::ice::mdns::MulticastDnsMode;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
-use rtc::mdns::MDNS_PORT;
+use rtc::mdns::{MDNS_PORT, MulticastSocket};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
@@ -165,38 +166,135 @@ where
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
     pending_ice_configuration: Option<(Vec<RTCIceServer>, RTCIceTransportPolicy)>,
+    udp_addrs: Vec<SocketAddr>,
+    tcp_addrs: Vec<SocketAddr>,
+    mdns_mode: MulticastDnsMode,
+    ice_servers: Vec<RTCIceServer>,
+    ice_gather_policy: RTCIceTransportPolicy,
+    /// Mirrors `SettingEngine::discard_local_candidates_during_ice_restart`, because discarding the
+    /// old candidates and replacing the transports they name are the same decision (webrtc#868).
+    discard_local_candidates_during_ice_restart: bool,
 }
 
 impl<I> PeerConnectionDriver<I>
 where
     I: Interceptor + 'static,
 {
-    /// Create a new driver for the given peer connection
-    pub(crate) async fn new(
-        inner: Arc<PeerConnectionRef<I>>,
-        stun_gatherer: RTCStunGatherer,
-        turn_relayer: RTCTurnRelayer,
-        mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
-        udp_sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
-        tcp_listeners: HashMap<SocketAddr, Arc<dyn AsyncTcpListener>>,
-    ) -> Result<Self> {
-        if udp_sockets.is_empty() && tcp_listeners.is_empty() {
+    /// Builds every transport the driver owns, replacing whatever it had.
+    ///
+    /// The one place sockets, listeners and gatherers come into existence — called once at the
+    /// top of [`event_loop`](Self::event_loop) and again whenever an ICE restart replaces the
+    /// transport (webrtc#868). Two construction paths would be two paths to keep in step, and
+    /// the rebind is exactly "do startup again".
+    ///
+    /// Binding happens here rather than at `build()` time because a runtime's I/O resource must
+    /// be created on the reactor that will poll it, and this runs inside the driver's own future.
+    ///
+    /// **Old transports are dropped first.** Binding the new ones while the old are still open
+    /// fails with `EADDRINUSE` for any fixed port, which would silently reduce the rebind to a
+    /// no-op for exactly the deployments that pin their ports. The cost is that a failure here
+    /// leaves the connection with no transport — acceptable, because the only caller that hits
+    /// the failure path is a restart whose premise is that the current transport is already
+    /// unusable.
+    async fn bind_transports(&mut self) -> Result<()> {
+        let runtime = Arc::clone(&self.inner.runtime);
+
+        // Drop before binding — see above. Also drops every accepted TCP stream, which is
+        // correct: they belong to the generation being replaced.
+        self.udp_sockets.clear();
+        self.mdns_socket = None;
+        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
+
+        if self.mdns_mode != MulticastDnsMode::Disabled {
+            self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
+        }
+
+        for addr in &self.udp_addrs {
+            let socket = std::net::UdpSocket::bind(addr)?;
+            socket.set_nonblocking(true)?;
+            let local_addr = socket.local_addr()?;
+            self.udp_sockets
+                .insert(local_addr, runtime.wrap_udp_socket(socket)?);
+        }
+
+        let mut tcp_listeners = HashMap::new();
+        for addr in &self.tcp_addrs {
+            let listener = std::net::TcpListener::bind(addr)?;
+            listener.set_nonblocking(true)?;
+            let local_addr = listener.local_addr()?;
+            tcp_listeners.insert(local_addr, runtime.wrap_tcp_listener(listener)?);
+        }
+        self.tcp_transport = RTCTcpTransport::new(tcp_listeners);
+
+        if self.udp_sockets.is_empty() && self.tcp_transport.is_empty() {
             return Err(Error::Other("no sockets or listeners available".to_owned()));
         }
 
-        Ok(Self {
+        // Rebuilt, not updated: a gatherer's STUN clients and TURN allocations are keyed by
+        // 5-tuples that no longer exist, so there is nothing in the old ones worth carrying over.
+        let local_addrs: Vec<SocketAddr> = self.udp_sockets.keys().copied().collect();
+        self.stun_gatherer = RTCStunGatherer::new(
+            local_addrs.clone(),
+            self.ice_servers.clone(),
+            self.ice_gather_policy,
+            Arc::clone(&runtime),
+        );
+        self.turn_relayer = RTCTurnRelayer::new(
+            local_addrs,
+            self.ice_servers.clone(),
+            self.ice_gather_policy,
+            runtime,
+        );
+
+        Ok(())
+    }
+
+    /// Create a new driver for the given peer connection.
+    ///
+    /// Records configuration only; every transport is built by
+    /// [`bind_transports`](Self::bind_transports) once the event loop starts, on the runtime that
+    /// will poll it.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        inner: Arc<PeerConnectionRef<I>>,
+        udp_addrs: Vec<SocketAddr>,
+        tcp_addrs: Vec<SocketAddr>,
+        mdns_mode: MulticastDnsMode,
+        ice_servers: Vec<RTCIceServer>,
+        ice_gather_policy: RTCIceTransportPolicy,
+        discard_local_candidates_during_ice_restart: bool,
+    ) -> Self {
+        let runtime = Arc::clone(&inner.runtime);
+        Self {
             inner,
-            stun_gatherer,
-            turn_relayer,
-            mdns_socket,
-            udp_sockets,
+            // Placeholders until `bind_transports` runs; constructing them costs no I/O.
+            stun_gatherer: RTCStunGatherer::new(
+                Vec::new(),
+                ice_servers.clone(),
+                ice_gather_policy,
+                Arc::clone(&runtime),
+            ),
+            turn_relayer: RTCTurnRelayer::new(
+                Vec::new(),
+                ice_servers.clone(),
+                ice_gather_policy,
+                runtime,
+            ),
+            mdns_socket: None,
+            udp_sockets: HashMap::new(),
             gso_scratch: Vec::new(),
-            tcp_transport: RTCTcpTransport::new(tcp_listeners),
+            tcp_transport: RTCTcpTransport::new(HashMap::new()),
             ice_gathering_active: false,
             stun_gathering_complete: false,
             turn_gathering_complete: false,
             pending_ice_configuration: None,
-        })
+            udp_addrs,
+            tcp_addrs,
+            mdns_mode,
+            ice_servers,
+            ice_gather_policy,
+            discard_local_candidates_during_ice_restart,
+        }
     }
 
     /// Mark the connection closing and wake any sender parked in send back-pressure.
@@ -220,9 +318,19 @@ where
     pub(crate) async fn event_loop(
         &mut self,
         mut driver_event_rx: Receiver<PeerConnectionDriverEvent>,
+        init_tx: Sender<Result<()>>,
     ) -> Result<()> {
+        // Build the transports before reporting init, so `build()` sees a bind or wrap failure
+        // as an error instead of returning a healthy-looking connection in front of a dead
+        // driver. Capacity-1 channel, sent exactly once → `try_send` never fails as Full.
+        if let Err(err) = self.bind_transports().await {
+            let _ = init_tx.try_send(Err(Error::Other(err.to_string())));
+            return Err(err);
+        }
+        let _ = init_tx.try_send(Ok(()));
+
         // Collect socket info into a vec for indexed access
-        let udp_socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
+        let mut udp_socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
             .udp_sockets
             .iter()
             .map(|(addr, sock)| (*addr, sock.clone()))
@@ -413,6 +521,73 @@ where
                 // Driver events (RTP, RTCP, or ICE candidate)
                 evt = driver_event_rx.recv().fuse() => {
                     if let Some(evt) = evt {
+                        // Rebind before the gathering it must precede. `IceGathering` is the
+                        // message that starts a generation gathering, so an ICE restart that
+                        // replaces the sockets has to swap them here — gathering over the old
+                        // ones would produce candidates for addresses about to disappear.
+                        if matches!(evt, PeerConnectionDriverEvent::IceGathering)
+                            && self.inner.ice_restart_rebind_pending.swap(false, Ordering::AcqRel)
+                        {
+                            // The driver's map is not the only owner. This loop keeps a clone
+                            // per socket in `udp_socket_list`, and every in-flight recv future
+                            // owns another. Drop them *before* rebinding: `bind_transports`
+                            // clears the map, but these clones would keep the old sockets open,
+                            // and a configured fixed port cannot be reclaimed while its previous
+                            // socket still holds it — the bind fails with `EADDRINUSE` and takes
+                            // the connection down with it.
+                            udp_recv_futures.clear();
+                            udp_socket_list.clear();
+                            udp_socket_buffers.clear();
+
+                            match self.bind_transports().await {
+                                Ok(()) => {
+                                    let new_sockets: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
+                                        .udp_sockets
+                                        .iter()
+                                        .map(|(addr, socket)| (*addr, socket.clone()))
+                                        .collect();
+                                    debug!(
+                                        "ICE restart rebound transports; local addrs now {:?}",
+                                        self.udp_sockets.keys().collect::<Vec<_>>()
+                                    );
+                                    // Rebuild everything keyed by socket index. The futures being
+                                    // dropped here own the old buffers and were polling sockets
+                                    // that no longer exist.
+                                    udp_socket_list = new_sockets
+                                        .into_iter()
+                                        .chain(self.mdns_socket.iter().filter_map(|socket| {
+                                            socket
+                                                .local_addr()
+                                                .ok()
+                                                .map(|local_addr| (local_addr, socket.clone()))
+                                        }))
+                                        .collect();
+                                    udp_socket_buffers = udp_socket_list
+                                        .iter()
+                                        .map(|(_, socket)| {
+                                            vec![0u8; gro_recv_buf_len(socket.max_gro_segments())]
+                                        })
+                                        .collect();
+                                    udp_recv_futures = udp_socket_list
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(idx, (local_addr, socket))| {
+                                            let buf = std::mem::take(&mut udp_socket_buffers[idx]);
+                                            create_udp_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
+                                        })
+                                        .collect();
+                                    active_socket_count = udp_socket_list.len();
+                                }
+                                Err(err) => {
+                                    // `bind_transports` drops before it binds, so there is
+                                    // nothing to fall back to — the connection has no transport
+                                    // and the loop cannot usefully continue.
+                                    error!("Failed to rebind transports for ICE restart: {err}");
+                                    return Err(err);
+                                }
+                            }
+                        }
+
                         let is_closed = self.handle_driver_event(evt).await;
                         if is_closed {
                             trace!("Driver event channel closed, exiting event loop");
@@ -1013,7 +1188,12 @@ where
                     self.stun_gatherer
                         .update_configuration(ice_servers.clone(), ice_transport_policy);
                     self.turn_relayer
-                        .update_configuration(ice_servers, ice_transport_policy);
+                        .update_configuration(ice_servers.clone(), ice_transport_policy);
+                    // Also retain it: a later rebind rebuilds the gatherers from these fields,
+                    // and rebuilding from the construction-time configuration would silently
+                    // undo every `set_configuration` since.
+                    self.ice_servers = ice_servers;
+                    self.ice_gather_policy = ice_transport_policy;
                 }
 
                 self.ice_gathering_active = true;

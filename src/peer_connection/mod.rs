@@ -69,12 +69,9 @@ use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
-use transports::stun_gatherer::RTCStunGatherer;
-use transports::turn_relayer::RTCTurnRelayer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::ice::mdns::MulticastDnsMode;
-use rtc::mdns::MulticastSocket;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
@@ -114,7 +111,9 @@ pub use rtc::peer_connection::{
     state::{
         RTCIceConnectionState, RTCIceGatheringState, RTCPeerConnectionState, RTCSignalingState,
     },
-    transport::{RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceProtocol},
+    transport::{
+        RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceParameters, RTCIceProtocol,
+    },
 };
 
 /// Trait for handling peer connection events asynchronously
@@ -180,6 +179,7 @@ where
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     mdns_mode: MulticastDnsMode,
+    discard_local_candidates_during_ice_restart: bool,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     dedicated_reactor: bool,
@@ -194,6 +194,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             runtime: None,
             handler: None,
             mdns_mode: MulticastDnsMode::Disabled,
+            discard_local_candidates_during_ice_restart: false,
             udp_addrs: vec![],
             tcp_addrs: vec![],
             dedicated_reactor: false,
@@ -232,6 +233,8 @@ where
     /// Configures the builder with the specified [`SettingEngine`].
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
         self.mdns_mode = setting_engine.multicast_dns().mode;
+        self.discard_local_candidates_during_ice_restart =
+            setting_engine.discard_local_candidates_during_ice_restart();
         self.builder = self.builder.with_setting_engine(setting_engine);
         self
     }
@@ -279,6 +282,8 @@ where
             runtime: self.runtime,
             handler: self.handler,
             mdns_mode: self.mdns_mode,
+            discard_local_candidates_during_ice_restart: self
+                .discard_local_candidates_during_ice_restart,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
             dedicated_reactor: self.dedicated_reactor,
@@ -428,6 +433,7 @@ where
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
             self.mdns_mode,
+            self.discard_local_candidates_during_ice_restart,
             self.udp_addrs,
             self.tcp_addrs,
             self.dedicated_reactor,
@@ -616,6 +622,96 @@ where
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
     /// Channels for delivering RTCP feedback to local (sent) tracks, keyed by track id.
     pub(crate) track_local_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackLocalEvent>>>,
+    /// mirroring `SettingEngine::discard_local_candidates_during_ice_restart` — one switch, because
+    /// discarding the old candidates and replacing the sockets they name are two halves of the
+    /// same decision (webrtc#868).
+    pub(crate) discard_local_candidates_during_ice_restart: bool,
+    /// Set when an ICE restart is detected, cleared by the driver when it has rebound.
+    ///
+    /// A flag rather than a driver event so the rebind cannot be ordered after the gathering it
+    /// must precede: the driver checks it while handling `IceGathering`, which is the message
+    /// that starts the restarted generation's gathering.
+    pub(crate) ice_restart_rebind_pending: AtomicBool,
+}
+
+/// The ICE credentials a description carries, resolved the way the core resolves them.
+///
+/// Session-level `ice-ufrag`/`ice-pwd` win; otherwise the first media section carrying them that
+/// is not `a=inactive`; otherwise an inactive one, for the corner case where every section is.
+/// This mirrors `rtc`'s `extract_ice_details`.
+///
+/// Values are compared exactly, never normalised: the core splits `a=key:value` on the first
+/// colon and keeps the remainder verbatim, so trimming here would let this layer and the core
+/// disagree about whether a restart happened.
+fn ice_credentials(desc: &RTCSessionDescription) -> Option<(String, String)> {
+    let parsed = desc.unmarshal().ok()?;
+
+    let mut ufrag = parsed.attribute("ice-ufrag").map(String::as_str);
+    let mut pwd = parsed.attribute("ice-pwd").map(String::as_str);
+    let (mut backup_ufrag, mut backup_pwd) = (None, None);
+
+    for media in &parsed.media_descriptions {
+        let media_ufrag = media.attribute("ice-ufrag").and_then(|value| value);
+        let media_pwd = media.attribute("ice-pwd").and_then(|value| value);
+
+        if media.attribute("inactive").is_some() {
+            backup_ufrag = backup_ufrag.or(media_ufrag);
+            backup_pwd = backup_pwd.or(media_pwd);
+            continue;
+        }
+        ufrag = ufrag.or(media_ufrag);
+        pwd = pwd.or(media_pwd);
+    }
+
+    Some((
+        ufrag.or(backup_ufrag)?.to_owned(),
+        pwd.or(backup_pwd)?.to_owned(),
+    ))
+}
+
+/// Whether applying `desc` will make the core restart ICE.
+///
+/// A mirror of the core's own condition in `set_remote_description`, clause for clause:
+///
+/// ```text
+/// is_renegotiation && have_remote_credentials_change(ufrag, pwd) && !we_offer
+/// ```
+///
+/// Mirrored rather than approximated, because the two must not disagree. If this says "restart"
+/// and the core does not, a working transport is replaced mid-session; if the core restarts and
+/// this stays silent, the restarted generation checks over the very transport the restart was
+/// meant to replace — the failure webrtc#868 reports.
+///
+/// Note what is deliberately *not* used: the local credentials. They look like the obvious
+/// signal — a restart does replace them — but
+/// [`with_ice_credentials`](rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder::with_ice_credentials)
+/// pins them and `stage_ice_restart` seeds the restart from exactly those, so a connection with
+/// static credentials would restart without its local ufrag ever changing.
+fn will_restart_ice<I: Interceptor + 'static>(
+    core: &RTCPeerConnection<I>,
+    desc: &RTCSessionDescription,
+) -> bool {
+    // `we_offer`: an answer means the restart, if any, is one we asked for, and was already armed
+    // at `restart_ice()`/`create_offer()`. Arming again here would rebind a working transport at
+    // the *next* negotiation, where the cause is far from the symptom.
+    if desc.sdp_type == RTCSdpType::Answer {
+        return false;
+    }
+
+    // `is_renegotiation` and the credentials to compare against come from the same place: the
+    // last remote description the core actually applied. Reading them from there rather than from
+    // the ICE transport keeps this independent of whether SCTP or a transceiver happens to be
+    // reachable yet.
+    let Some(current) = core.current_remote_description() else {
+        return false;
+    };
+    let (Some((current_ufrag, current_pwd)), Some((ufrag, pwd))) =
+        (ice_credentials(current), ice_credentials(desc))
+    else {
+        return false;
+    };
+
+    ufrag != current_ufrag || pwd != current_pwd
 }
 
 /// Number of coalesced (driver-behind) sends between cooperative yields in
@@ -628,6 +724,19 @@ impl<I> PeerConnectionRef<I>
 where
     I: Interceptor,
 {
+    /// Marks that the next gathering pass must rebind the UDP sockets.
+    ///
+    /// A no-op unless the application asked for it through
+    /// `SettingEngine::discard_local_candidates_during_ice_restart`, so a connection that keeps
+    /// its transport across restarts pays nothing.
+    #[inline]
+    pub(crate) fn mark_ice_restart_rebind_pending(&self) {
+        if self.discard_local_candidates_during_ice_restart {
+            self.ice_restart_rebind_pending
+                .store(true, Ordering::Release);
+        }
+    }
+
     /// Coalescing driver wake for pending writes — the pion `awakeWriteLoop`
     /// equivalent. Marks a flush as pending and pokes the driver only on the
     /// `false -> true` transition, so a burst of sends yields at most one wake.
@@ -670,38 +779,25 @@ where
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
         mdns_mode: MulticastDnsMode,
+        discard_local_candidates_during_ice_restart: bool,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         dedicated_reactor: bool,
         reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
     ) -> Result<Self> {
-        // Bind the std sockets up front (synchronous, and needed to compute the
-        // local addresses used for ICE gathering / SDP). Wrapping them into async
-        // I/O resources is deferred so it can happen on whichever runtime actually
-        // drives the event loop: with a dedicated reactor thread, tokio I/O
-        // resources must be created on the reactor that polls them, so wrapping is
-        // done inside the reactor future (see `run_driver`) rather than here.
-        let std_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
-            Some(MulticastSocket::new().into_std()?)
-        } else {
-            None
-        };
-
-        let mut std_udp_sockets = Vec::new();
+        // Resolve the configured addresses here — `A: ToSocketAddrs` is not necessarily `Send`,
+        // so it cannot cross into the driver future. Binding itself happens in the driver, which
+        // owns the sockets for their whole life: startup, and rebinding on ICE restart
+        // (webrtc#868). Keeping the *configured* addresses rather than the bound ones is what
+        // lets an ephemeral `:0` draw a fresh port on a rebind.
+        let mut resolved_udp_addrs = Vec::new();
         for addr in udp_addrs {
-            let socket = std::net::UdpSocket::bind(addr)?;
-            socket.set_nonblocking(true)?;
-            let local_addr = socket.local_addr()?;
-            std_udp_sockets.push((local_addr, socket));
+            resolved_udp_addrs.extend(addr.to_socket_addrs()?);
         }
-
-        let mut std_tcp_listeners = Vec::new();
+        let mut resolved_tcp_addrs = Vec::new();
         for addr in tcp_addrs {
-            let listener = std::net::TcpListener::bind(addr)?;
-            listener.set_nonblocking(true)?;
-            let local_addr = listener.local_addr()?;
-            std_tcp_listeners.push((local_addr, listener));
+            resolved_tcp_addrs.extend(addr.to_socket_addrs()?);
         }
 
         let configuration = core.get_configuration();
@@ -725,27 +821,12 @@ where
                 closing: AtomicBool::new(false),
                 data_channel_send_buffer_limit,
                 data_channel_backpressure: crate::runtime::Notify::new(),
+                discard_local_candidates_during_ice_restart,
+                ice_restart_rebind_pending: AtomicBool::new(false),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor,
         };
-
-        let local_addrs = std_udp_sockets
-            .iter()
-            .map(|(addr, _)| *addr)
-            .collect::<Vec<_>>();
-        let stun_gatherer = RTCStunGatherer::new(
-            local_addrs.clone(),
-            ice_servers.clone(),
-            ice_gather_policy,
-            Arc::clone(&runtime),
-        );
-        let turn_relayer = RTCTurnRelayer::new(
-            local_addrs,
-            ice_servers,
-            ice_gather_policy,
-            Arc::clone(&runtime),
-        );
 
         // Init-result oneshot. `new()` awaits this so that socket wrapping and
         // driver construction errors propagate out of `build()`, instead of being
@@ -760,48 +841,18 @@ where
         // future, build the driver, report the init outcome, then run the event
         // loop to completion.
         let inner = peer_connection.inner.clone();
-        let driver_runtime = runtime.clone();
         let run_driver = async move {
-            let init: Result<PeerConnectionDriver<I>> = async {
-                let async_mdns_socket = match std_mdns_socket {
-                    Some(socket) => Some(driver_runtime.wrap_udp_socket(socket)?),
-                    None => None,
-                };
-                let mut async_udp_sockets = HashMap::new();
-                for (local_addr, socket) in std_udp_sockets {
-                    async_udp_sockets.insert(local_addr, driver_runtime.wrap_udp_socket(socket)?);
-                }
-                let mut async_tcp_listeners = HashMap::new();
-                for (local_addr, listener) in std_tcp_listeners {
-                    async_tcp_listeners
-                        .insert(local_addr, driver_runtime.wrap_tcp_listener(listener)?);
-                }
+            let mut driver = PeerConnectionDriver::new(
+                inner,
+                resolved_udp_addrs,
+                resolved_tcp_addrs,
+                mdns_mode,
+                ice_servers,
+                ice_gather_policy,
+                discard_local_candidates_during_ice_restart,
+            );
 
-                PeerConnectionDriver::new(
-                    inner,
-                    stun_gatherer,
-                    turn_relayer,
-                    async_mdns_socket,
-                    async_udp_sockets,
-                    async_tcp_listeners,
-                )
-                .await
-            }
-            .await;
-
-            let mut driver = match init {
-                Ok(driver) => {
-                    // Capacity-1 channel, sent exactly once → `try_send` never Full.
-                    let _ = init_tx.try_send(Ok(()));
-                    driver
-                }
-                Err(e) => {
-                    let _ = init_tx.try_send(Err(e));
-                    return;
-                }
-            };
-
-            if let Err(e) = driver.event_loop(driver_event_rx).await {
+            if let Err(e) = driver.event_loop(driver_event_rx, init_tx).await {
                 error!("I/O error: {}", e);
             }
             // The driver has stopped for good (clean shutdown OR an abnormal error exit).
@@ -925,6 +976,11 @@ where
         &self,
         options: Option<RTCOfferOptions>,
     ) -> Result<RTCSessionDescription> {
+        // An application can restart either way — `restart_ice()` or the offer option — and both
+        // have to reach the socket rebind.
+        if options.as_ref().is_some_and(|options| options.ice_restart) {
+            self.inner.mark_ice_restart_rebind_pending();
+        }
         let mut core = self.inner.core.lock().await;
         core.create_offer(options)
     }
@@ -976,6 +1032,16 @@ where
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
+            // An answerer is never told a restart is coming: it just receives a description
+            // carrying new ICE credentials, and the core restarts implicitly while applying it.
+            // Arm before applying, because the core updates the remote credentials as it goes —
+            // afterwards there is nothing left to compare against.
+            if self.inner.discard_local_candidates_during_ice_restart
+                && will_restart_ice(&core, &desc)
+            {
+                self.inner.mark_ice_restart_rebind_pending();
+            }
+
             core.set_remote_description(desc)?;
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
@@ -1033,6 +1099,7 @@ where
             let mut core = self.inner.core.lock().await;
             core.restart_ice();
         }
+        self.inner.mark_ice_restart_rebind_pending();
 
         self.inner
             .driver_event_tx
@@ -1282,6 +1349,15 @@ mod tests {
         Arc<PeerConnectionRef>,
         crate::runtime::Receiver<PeerConnectionDriverEvent>,
     ) {
+        new_test_peer_connection_with_rebind(false).await
+    }
+
+    pub(crate) async fn new_test_peer_connection_with_rebind(
+        discard_local_candidates_during_ice_restart: bool,
+    ) -> (
+        Arc<PeerConnectionRef>,
+        crate::runtime::Receiver<PeerConnectionDriverEvent>,
+    ) {
         let core = RTCPeerConnectionBuilder::new().build().unwrap();
         let runtime = default_runtime().expect("test requires a runtime feature");
         let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
@@ -1301,9 +1377,60 @@ mod tests {
             track_remote_events_tx: Mutex::new(HashMap::new()),
             track_local_events_tx: Mutex::new(HashMap::new()),
             rtp_transceivers: Mutex::new(HashMap::new()),
+            discard_local_candidates_during_ice_restart,
+            ice_restart_rebind_pending: AtomicBool::new(false),
         });
 
         (inner, driver_event_rx)
+    }
+
+    // The flag is one switch with two halves: the core discards the stale candidates, this layer
+    // replaces the sockets those candidates named. A connection that did not ask for it must not
+    // arm the rebind at all — otherwise every restart pays for a rebind nobody wanted.
+    #[test]
+    fn mark_ice_restart_rebind_pending_is_gated_on_the_setting() {
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.block_on(Box::pin(async move {
+            for enabled in [false, true] {
+                let (inner, _rx) = new_test_peer_connection_with_rebind(enabled).await;
+                assert!(
+                    !inner.ice_restart_rebind_pending.load(Ordering::Acquire),
+                    "nothing is armed before a restart"
+                );
+
+                inner.mark_ice_restart_rebind_pending();
+
+                assert_eq!(
+                    enabled,
+                    inner.ice_restart_rebind_pending.load(Ordering::Acquire),
+                    "rebind armed only when the setting asked for it"
+                );
+            }
+        }));
+    }
+
+    // Transports are built inside the driver's own future, on the runtime that will poll them.
+    // That makes bind and wrap failures happen *after* `build()` has spawned the driver, so the
+    // init channel is what carries them back. Without it `build()` would hand back a healthy
+    // -looking connection in front of a dead driver — which looks exactly like the stall this
+    // work is fixing.
+    #[test]
+    fn build_reports_a_bind_failure_instead_of_returning_a_dead_connection() {
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.clone().block_on(Box::pin(async move {
+            // Not an address on this host: `EADDRNOTAVAIL`.
+            let result = PeerConnectionBuilder::new()
+                .with_handler(Arc::new(DummyHandler))
+                .with_runtime(rt)
+                .with_udp_addrs(vec!["1.2.3.4:5"])
+                .build()
+                .await;
+
+            assert!(
+                result.is_err(),
+                "build() must surface the driver's bind failure"
+            );
+        }));
     }
 
     #[test]
