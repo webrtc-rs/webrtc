@@ -76,8 +76,8 @@ impl RTCTurnRelayer {
         local_addrs: Vec<SocketAddr>,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
-        runtime: Arc<dyn Runtime>,
         allocation_refresh_interval_cap: Option<Duration>,
+        runtime: Arc<dyn Runtime>,
         crypto_provider: Arc<dyn RTCCryptoProvider>,
     ) -> Self {
         Self {
@@ -312,7 +312,6 @@ impl RTCTurnRelayer {
                             software: String::new(),
                             rto_in_ms: 0,
                             allocation_refresh_interval_cap: self.allocation_refresh_interval_cap,
-                            ..Default::default()
                         },
                         Arc::clone(&self.crypto_provider),
                     )?;
@@ -800,8 +799,8 @@ mod tests {
                     credential: "pass".to_owned(),
                 }],
                 RTCIceTransportPolicy::Relay,
-                crate::runtime::default_runtime().expect("test requires a runtime feature"),
                 None,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
                 rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
             );
 
