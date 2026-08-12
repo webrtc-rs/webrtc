@@ -30,7 +30,7 @@ crypto-ring = ["rtc/crypto-ring"]
 crypto-aws-lc-rs = ["rtc/crypto-aws-lc-rs"]
 
 [dependencies]
-rtc = { git = "https://github.com/alinejun/rtc", rev = "492959c3df52ae935c20b48ffffa1b751a87cdf6", default-features = false }
+rtc = { git = "https://github.com/alinejun/rtc", rev = "47e6abd5f8fe98b68f1f89dfb77b3073ddd2444f", default-features = false }
 
 bytes = "1.12.0"
 async-trait = "0.1.89"
@@ -50,7 +50,7 @@ tokio = { version = "1.52.3", features = ["net", "time", "sync", "rt", "rt-multi
 smol = { version = "2.0.2", optional = true }
 
 [dev-dependencies]
-signal = { git = "https://github.com/alinejun/rtc", rev = "492959c3df52ae935c20b48ffffa1b751a87cdf6", package = "rtc-signal" }
+signal = { git = "https://github.com/alinejun/rtc", rev = "47e6abd5f8fe98b68f1f89dfb77b3073ddd2444f", package = "rtc-signal" }
 
 env_logger = "0.11.11"
 chrono = "0.4.45"
