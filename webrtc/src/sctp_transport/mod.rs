@@ -81,6 +81,9 @@ pub struct RTCSctpTransport {
 
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
+    // Stream identifiers that have been handed out to data channels, including the
+    // ones created directly on this transport through the ORTC API.
+    data_channel_ids_used: Arc<Mutex<HashSet<u16>>>,
     pub(crate) data_channels_opened: Arc<AtomicU32>,
     pub(crate) data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
@@ -106,6 +109,7 @@ impl RTCSctpTransport {
             on_data_channel_opened_handler: Arc::new(ArcSwapOption::empty()),
 
             data_channels: Arc::new(Mutex::new(vec![])),
+            data_channel_ids_used: Arc::new(Mutex::new(HashSet::new())),
             data_channels_opened: Arc::new(AtomicU32::new(0)),
             data_channels_requested: Arc::new(AtomicU32::new(0)),
             data_channels_accepted: Arc::new(AtomicU32::new(0)),
@@ -423,11 +427,15 @@ impl RTCSctpTransport {
             }
         }
 
+        let mut ids_used = self.data_channel_ids_used.lock().await;
+        ids_map.extend(ids_used.iter());
+
         let max = self.max_channels();
         while id < max - 1 {
             if ids_map.contains(&id) {
                 id += 2;
             } else {
+                ids_used.insert(id);
                 return Ok(id);
             }
         }
