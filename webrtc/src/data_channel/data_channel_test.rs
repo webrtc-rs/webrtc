@@ -1715,6 +1715,45 @@ async fn signal_ortc_pair(stack_a: Arc<TestOrtcStack>, stack_b: Arc<TestOrtcStac
 }
 
 #[tokio::test]
+async fn test_data_channel_ortc_stream_identifiers() -> Result<()> {
+    let api = APIBuilder::new().build();
+
+    let (stack_a, stack_b) = new_ortc_pair(&api).await?;
+
+    signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
+
+    let first = api
+        .new_data_channel(
+            Arc::clone(&stack_a.sctp),
+            DataChannelParameters {
+                label: "First".to_owned(),
+                ..Default::default()
+            },
+        )
+        .await?;
+    let second = api
+        .new_data_channel(
+            Arc::clone(&stack_a.sctp),
+            DataChannelParameters {
+                label: "Second".to_owned(),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    assert_ne!(
+        first.id(),
+        second.id(),
+        "data channels created on the same transport must not share a stream identifier"
+    );
+
+    stack_a.close().await?;
+    stack_b.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_data_channel_ortc_e2e() -> Result<()> {
     let api = APIBuilder::new().build();
 
