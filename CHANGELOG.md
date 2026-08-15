@@ -29,6 +29,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection (`RTCPeerConnection::crypto_provider()`) rather than constructing one, so a
   connection uses exactly one provider throughout. A CI check asserts `webrtc` depends on no
   crypto implementation.
+- **Bind addresses are resolved on every bind, and a wildcard means "every interface"**
+  ([webrtc#874](https://github.com/webrtc-rs/webrtc/issues/874)). `with_udp_addrs` /
+  `with_tcp_addrs` values are kept as configured instead of being resolved once at construction,
+  so the ICE-restart rebind added in [webrtc#868](https://github.com/webrtc-rs/webrtc/issues/868)
+  re-resolves them: a host name follows its DNS record, and `0.0.0.0` / `[::]` re-enumerates the
+  local interfaces. A wildcard is no longer bound verbatim — one socket is bound per interface
+  address (skipping loopback and link-local), which is what makes its host candidates usable, and
+  what lets an ICE restart after a Wi-Fi/cellular handover pick up the interfaces the device has
+  now. On a host with no usable interface the wildcard is bound as before. Because the configured
+  addresses now outlive `build()`, `PeerConnectionBuilder::build` requires `A: Send + 'static` —
+  owned addresses (`String`, `SocketAddr`, `&'static str`) are unaffected.
+- **An address that cannot be bound is skipped rather than fatal**
+  ([webrtc#874](https://github.com/webrtc-rs/webrtc/issues/874)). The failure is logged — `warn`
+  for an enumerated interface address, `error` for one the application configured — and binding
+  continues with the rest; only binding nothing at all is still an error. An address left behind
+  by a network handover (`EADDRNOTAVAIL`) therefore no longer costs the connection the interfaces
+  that are still there.
 
 -
 
