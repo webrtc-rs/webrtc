@@ -17,6 +17,7 @@
 
 use anyhow::Result;
 use std::collections::BTreeSet;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use webrtc::data_channel::RTCDataChannelInit;
@@ -418,6 +419,32 @@ fn test_ice_restart_rebinds_with_static_local_credentials() {
     block_on(ice_restart_rebinds_with_static_local_credentials()).unwrap();
 }
 
+/// A free loopback port that the kernel will not hand out to anyone who did not ask for it.
+///
+/// Deliberately not `bind("127.0.0.1:0")`: that returns an *ephemeral* port, and this test frees
+/// its port for the length of one rebind — which is exactly long enough for an unrelated `:0` bind
+/// to be handed it. Those binds are everywhere (`cargo test` runs the test binaries in parallel,
+/// and most of them build peer connections on `:0`), and losing that race leaves the driver with
+/// nothing bound, which is how this test failed on CI while testing nothing it meant to.
+///
+/// Ports below 32768 sit under every platform's ephemeral range — Linux allocates from
+/// 32768–60999, macOS and Windows from 49152 — so a port taken from here can only be lost to
+/// something that asks for that number. The scan starts at a process-derived offset so two test
+/// binaries running side by side do not converge on the same one.
+fn reserve_fixed_port() -> Result<SocketAddr> {
+    const FIRST: u16 = 20_000;
+    const LAST: u16 = 32_767;
+
+    let start = FIRST + (std::process::id() % u32::from(LAST - FIRST)) as u16;
+    for port in (start..=LAST).chain(FIRST..start) {
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        if std::net::UdpSocket::bind(addr).is_ok() {
+            return Ok(addr);
+        }
+    }
+    anyhow::bail!("no free loopback port outside the ephemeral range")
+}
+
 /// A fixed configured port must survive a rebind.
 ///
 /// The other tests use `:0`, which hides an ownership bug: the driver's socket map is not the
@@ -429,10 +456,7 @@ fn test_ice_restart_rebinds_with_static_local_credentials() {
 /// The assertion is deliberately "the connection still works", not "the ports changed" — a fixed
 /// port is expected to come back identical.
 async fn ice_restart_rebinds_a_fixed_port() -> Result<()> {
-    // A port that is free right now. Racy in principle; the window is one bind.
-    let probe = std::net::UdpSocket::bind("127.0.0.1:0")?;
-    let fixed = probe.local_addr()?;
-    drop(probe);
+    let fixed = reserve_fixed_port()?;
 
     let runtime = runtime();
     let (a_gather_tx, mut a_gather_rx) = channel::<()>(1);
@@ -479,6 +503,12 @@ async fn ice_restart_rebinds_a_fixed_port() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: initial connect"))?;
 
+    // Nothing queued may be mistaken for the restart's own gathering below. The first generation
+    // can leave a `Complete` unread in this capacity-1 channel, and taking *that* as the signal
+    // would let the assertion run before the rebind had gathered anything — reporting an empty
+    // candidate set instead of whatever really went wrong.
+    while a_gather_rx.try_recv().is_ok() {}
+
     pc_a.restart_ice().await?;
     let restart_offer = pc_a.create_offer(None).await?;
     // If the rebind failed, the driver has exited and this send fails — which is how the bug
@@ -487,9 +517,13 @@ async fn ice_restart_rebinds_a_fixed_port() -> Result<()> {
         .await
         .map_err(|err| anyhow::anyhow!("driver died rebinding a fixed port: {err}"))?;
 
-    timeout(Duration::from_secs(5), a_gather_rx.recv())
-        .await
-        .map_err(|_| anyhow::anyhow!("no re-gather after restart: the rebind failed"))?;
+    match timeout(Duration::from_secs(5), a_gather_rx.recv()).await {
+        Ok(Some(())) => {}
+        // The sender lives in the handler, which the driver drops when it exits: a closed
+        // channel is the rebind having taken the connection down with it.
+        Ok(None) => anyhow::bail!("the driver exited while rebinding the fixed port"),
+        Err(_) => anyhow::bail!("no re-gather after restart: the rebind failed"),
+    }
 
     let ports = local_ports(&pc_a).await?;
     assert!(
