@@ -40,12 +40,13 @@ use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
+use rtc::shared::ifaces::ifaces;
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::io::IoSliceMut;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -171,6 +172,118 @@ async fn send_datagrams(
         .map_err(Error::from)
 }
 
+/// One address to bind, as produced by [`resolve_bind_addrs`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BindAddr {
+    addr: SocketAddr,
+    /// True when this address came from enumerating the local interfaces rather than from the
+    /// application's configuration.
+    ///
+    /// Both are skipped when they fail to bind — see
+    /// [`bind_transports`](PeerConnectionDriver::bind_transports) — so this only says how loudly
+    /// to say so. An enumerated address that has gone away between the enumeration and the bind
+    /// (the interface disappeared, or an IPv6 address is still in duplicate-address detection) is
+    /// routine; a *configured* one that cannot be bound is something the application asked for
+    /// and did not get, which is worth an error in its log even when the connection survives it.
+    enumerated: bool,
+}
+
+/// Resolve the configured bind addresses into the concrete addresses to bind **now**.
+///
+/// Called on every [`bind_transports`](PeerConnectionDriver::bind_transports) rather than once at
+/// construction, because between the initial bind and an ICE-restart rebind the device may have
+/// changed network (webrtc#874): a host name can point somewhere new, and — the case that matters
+/// on mobile — the set of local interfaces is different. Resolving late is what lets the rebind
+/// follow the handover instead of asking for an address that no longer exists.
+fn resolve_bind_addrs<A: ToSocketAddrs>(addrs: &[A]) -> Result<Vec<BindAddr>> {
+    let mut resolved: Vec<BindAddr> = Vec::new();
+    for addr in addrs {
+        for addr in addr.to_socket_addrs()? {
+            if addr.ip().is_unspecified() {
+                expand_wildcard(addr, &mut resolved);
+            } else {
+                push_unique(&mut resolved, addr, false);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// Expand a wildcard address (`0.0.0.0`, `[::]`) into one address per usable local interface of
+/// the same family, falling back to the wildcard itself when there is none.
+///
+/// A wildcard socket receives on every interface, so binding it verbatim is fine for I/O — but
+/// every host candidate is derived from the socket's local address (see
+/// [`RTCStunGatherer::gather_host_candidates`]), and for a wildcard socket that is `0.0.0.0:port`,
+/// an address no peer can use. Enumerating the interfaces here is what turns a wildcard into real
+/// host candidates, and it is what makes `0.0.0.0` mean "whatever interfaces exist at bind time":
+/// an ICE restart after a Wi-Fi/cellular handover re-enumerates and picks up the new address
+/// rather than rebinding the one that disappeared (webrtc#874).
+///
+/// Skipped: loopback (no peer can reach it), unspecified, and link-local addresses (`169.254/16`,
+/// `fe80::/10` — an IPv6 link-local is meaningless to the peer without its scope id, which does
+/// not survive into a candidate).
+fn expand_wildcard(wildcard: SocketAddr, out: &mut Vec<BindAddr>) {
+    let interfaces = match ifaces() {
+        Ok(interfaces) => interfaces,
+        Err(err) => {
+            // Nothing to enumerate from: bind the wildcard as configured. Host candidates are
+            // then as unusable as they were before this expansion existed, which is the right
+            // failure — the connection still works over srflx/relay.
+            warn!("Failed to enumerate local interfaces for {wildcard}: {err}");
+            push_unique(out, wildcard, false);
+            return;
+        }
+    };
+
+    let port = wildcard.port();
+    // Counts usable interfaces, not pushes: one already listed explicitly by the application is
+    // deduplicated away, and mistaking that for "no interface" would add the wildcard back
+    // alongside it.
+    let mut usable = 0;
+    for interface in interfaces {
+        let Some(addr) = interface.addr else { continue };
+        if addr.is_ipv4() != wildcard.is_ipv4() {
+            continue;
+        }
+        let ip = addr.ip();
+        if ip.is_loopback() || ip.is_unspecified() || is_link_local(&ip) {
+            continue;
+        }
+        usable += 1;
+        push_unique(out, SocketAddr::new(ip, port), true);
+    }
+
+    if usable == 0 {
+        // A host with no usable interface of this family — a machine that is offline, or one
+        // where only loopback is up. Keep the wildcard so the bind still succeeds and the
+        // connection can come up over a relay.
+        debug!("No usable local interface to expand {wildcard} into; binding it as configured");
+        out.push(BindAddr {
+            addr: wildcard,
+            enumerated: false,
+        });
+    }
+}
+
+fn push_unique(out: &mut Vec<BindAddr>, addr: SocketAddr, enumerated: bool) {
+    // `ifaces()` can report the same address more than once, and configured lists may overlap
+    // the enumerated ones. Binding a duplicate is not an error — with `:0` it silently doubles
+    // the sockets, candidates and STUN traffic for one interface.
+    if !out.iter().any(|bind| bind.addr == addr) {
+        out.push(BindAddr { addr, enumerated });
+    }
+}
+
+/// Link-local unicast: `169.254.0.0/16` (RFC 3927) and `fe80::/10` (RFC 4291).
+fn is_link_local(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => ip.is_link_local(),
+        // `Ipv6Addr::is_unicast_link_local` is still unstable.
+        IpAddr::V6(ip) => (ip.segments()[0] & 0xffc0) == 0xfe80,
+    }
+}
+
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum PeerConnectionDriverEvent {
@@ -191,7 +304,7 @@ pub(crate) enum PeerConnectionDriverEvent {
 /// The driver for a peer connection
 ///
 /// Runs the event loop following rtc's EventLoop pattern with select!
-pub(crate) struct PeerConnectionDriver<I = NoopInterceptor>
+pub(crate) struct PeerConnectionDriver<I = NoopInterceptor, A = SocketAddr>
 where
     I: Interceptor,
 {
@@ -220,10 +333,16 @@ where
     /// Every variant goes in here, not just `OnMessage`: lifecycle events share the queue, so
     /// retaining uniformly is what preserves their order relative to the data around them.
     pending_data_channel_events: HashMap<RTCDataChannelId, VecDeque<DataChannelEvent>>,
-    /// The addresses as the application configured them — an ephemeral `:0` stays `:0`, so a
-    /// rebind draws a fresh port rather than asking for the one being replaced.
-    udp_addrs: Vec<SocketAddr>,
-    tcp_addrs: Vec<SocketAddr>,
+    /// The addresses as the application configured them, held **unresolved** and re-resolved on
+    /// every bind by [`resolve_bind_addrs`].
+    ///
+    /// Keeping the configured form rather than the bound one is what lets an ephemeral `:0` draw
+    /// a fresh port on a rebind instead of asking for the one being replaced. Keeping it
+    /// *unresolved* is what lets the rebind follow a network change (webrtc#874): a host name
+    /// re-resolves, and a wildcard re-enumerates the interfaces that exist at that moment rather
+    /// than the ones that existed when the connection was built.
+    udp_addrs: Vec<A>,
+    tcp_addrs: Vec<A>,
     mdns_mode: MulticastDnsMode,
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
@@ -234,91 +353,22 @@ where
     turn_allocation_refresh_interval_cap: Option<Duration>,
 }
 
-impl<I> PeerConnectionDriver<I>
+impl<I, A> PeerConnectionDriver<I, A>
 where
     I: Interceptor + 'static,
+    A: ToSocketAddrs,
 {
-    /// Builds every transport the driver owns, replacing whatever it had.
-    ///
-    /// The one place sockets, listeners and gatherers come into existence — called once at the
-    /// top of [`event_loop`](Self::event_loop) and again whenever an ICE restart replaces the
-    /// transport (webrtc#868). Two construction paths would be two paths to keep in step, and
-    /// the rebind is exactly "do startup again".
-    ///
-    /// Binding happens here rather than at `build()` time because a runtime's I/O resource must
-    /// be created on the reactor that will poll it, and this runs inside the driver's own future.
-    ///
-    /// **Old transports are dropped first.** Binding the new ones while the old are still open
-    /// fails with `EADDRINUSE` for any fixed port, which would silently reduce the rebind to a
-    /// no-op for exactly the deployments that pin their ports. The cost is that a failure here
-    /// leaves the connection with no transport — acceptable, because the only caller that hits
-    /// the failure path is a restart whose premise is that the current transport is already
-    /// unusable.
-    async fn bind_transports(&mut self) -> Result<()> {
-        let runtime = Arc::clone(&self.inner.runtime);
-
-        // Drop before binding — see above. Also drops every accepted TCP stream, which is
-        // correct: they belong to the generation being replaced.
-        self.udp_sockets.clear();
-        self.mdns_socket = None;
-        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
-
-        if self.mdns_mode != MulticastDnsMode::Disabled {
-            self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
-        }
-
-        for addr in &self.udp_addrs {
-            let socket = std::net::UdpSocket::bind(addr)?;
-            socket.set_nonblocking(true)?;
-            let local_addr = socket.local_addr()?;
-            self.udp_sockets
-                .insert(local_addr, runtime.wrap_udp_socket(socket)?);
-        }
-
-        let mut tcp_listeners = HashMap::new();
-        for addr in &self.tcp_addrs {
-            let listener = std::net::TcpListener::bind(addr)?;
-            listener.set_nonblocking(true)?;
-            let local_addr = listener.local_addr()?;
-            tcp_listeners.insert(local_addr, runtime.wrap_tcp_listener(listener)?);
-        }
-        self.tcp_transport = RTCTcpTransport::new(tcp_listeners);
-
-        if self.udp_sockets.is_empty() && self.tcp_transport.is_empty() {
-            return Err(Error::Other("no sockets or listeners available".to_owned()));
-        }
-
-        // Rebuilt, not updated: a gatherer's STUN clients and TURN allocations are keyed by
-        // 5-tuples that no longer exist, so there is nothing in the old ones worth carrying over.
-        let local_addrs: Vec<SocketAddr> = self.udp_sockets.keys().copied().collect();
-        self.stun_gatherer = RTCStunGatherer::new(
-            local_addrs.clone(),
-            self.ice_servers.clone(),
-            self.ice_gather_policy,
-            Arc::clone(&runtime),
-        );
-        self.turn_relayer = RTCTurnRelayer::new(
-            local_addrs,
-            self.ice_servers.clone(),
-            self.ice_gather_policy,
-            self.turn_allocation_refresh_interval_cap,
-            runtime,
-            Arc::clone(&self.crypto_provider),
-        );
-
-        Ok(())
-    }
-
     /// Create a new driver for the given peer connection.
     ///
     /// Records configuration only; every transport is built by
     /// [`bind_transports`](Self::bind_transports) once the event loop starts, on the runtime that
-    /// will poll it.
+    /// will poll it. The addresses are taken as configured and are not resolved here — see
+    /// [`udp_addrs`](Self::udp_addrs).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         inner: Arc<PeerConnectionRef<I>>,
-        udp_addrs: Vec<SocketAddr>,
-        tcp_addrs: Vec<SocketAddr>,
+        udp_addrs: Vec<A>,
+        tcp_addrs: Vec<A>,
         mdns_mode: MulticastDnsMode,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -362,6 +412,107 @@ where
             discard_local_candidates_during_ice_restart,
             turn_allocation_refresh_interval_cap,
         }
+    }
+
+    /// Builds every transport the driver owns, replacing whatever it had.
+    ///
+    /// The one place sockets, listeners and gatherers come into existence — called once at the
+    /// top of [`event_loop`](Self::event_loop) and again whenever an ICE restart replaces the
+    /// transport (webrtc#868). Two construction paths would be two paths to keep in step, and
+    /// the rebind is exactly "do startup again".
+    ///
+    /// Binding happens here rather than at `build()` time because a runtime's I/O resource must
+    /// be created on the reactor that will poll it, and this runs inside the driver's own future.
+    ///
+    /// **Old transports are dropped first.** Binding the new ones while the old are still open
+    /// fails with `EADDRINUSE` for any fixed port, which would silently reduce the rebind to a
+    /// no-op for exactly the deployments that pin their ports. The cost is that a failure here
+    /// leaves the connection with no transport — acceptable, because the only caller that hits
+    /// the failure path is a restart whose premise is that the current transport is already
+    /// unusable.
+    ///
+    /// **One address failing to bind is not a failure.** An address is skipped and logged, and
+    /// only binding *nothing at all* is an error, because that is the only outcome the connection
+    /// cannot continue from. A single dead address is exactly what a network handover leaves
+    /// behind (webrtc#874), and taking the whole connection down for it would throw away every
+    /// interface that is still there — the ones the restart exists to move onto.
+    async fn bind_transports(&mut self) -> Result<()> {
+        let runtime = Arc::clone(&self.inner.runtime);
+
+        // Drop before binding — see above. Also drops every accepted TCP stream, which is
+        // correct: they belong to the generation being replaced.
+        self.udp_sockets.clear();
+        self.mdns_socket = None;
+        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
+
+        if self.mdns_mode != MulticastDnsMode::Disabled {
+            self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
+        }
+
+        // Resolve here, not at construction: this runs again on every ICE-restart rebind, which
+        // is what makes the rebind follow a network change (webrtc#874).
+        for bind in resolve_bind_addrs(&self.udp_addrs)? {
+            let socket = match std::net::UdpSocket::bind(bind.addr) {
+                Ok(socket) => socket,
+                Err(err) => {
+                    if bind.enumerated {
+                        warn!("Skipping UDP bind on local address {}: {err}", bind.addr);
+                    } else {
+                        error!("Failed to bind UDP on address {}: {err}", bind.addr);
+                    }
+                    continue;
+                }
+            };
+            socket.set_nonblocking(true)?;
+            let local_addr = socket.local_addr()?;
+            self.udp_sockets
+                .insert(local_addr, runtime.wrap_udp_socket(socket)?);
+        }
+
+        let mut tcp_listeners = HashMap::new();
+        for bind in resolve_bind_addrs(&self.tcp_addrs)? {
+            let listener = match std::net::TcpListener::bind(bind.addr) {
+                Ok(listener) => listener,
+                Err(err) => {
+                    if bind.enumerated {
+                        warn!("Skipping TCP bind on local address {}: {err}", bind.addr);
+                    } else {
+                        error!("Failed to bind TCP on address {}: {err}", bind.addr);
+                    }
+                    continue;
+                }
+            };
+            listener.set_nonblocking(true)?;
+            let local_addr = listener.local_addr()?;
+            tcp_listeners.insert(local_addr, runtime.wrap_tcp_listener(listener)?);
+        }
+        if self.udp_sockets.is_empty() && tcp_listeners.is_empty() {
+            return Err(Error::Other(
+                "no udp_sockets or tcp_listeners available".to_owned(),
+            ));
+        }
+
+        self.tcp_transport = RTCTcpTransport::new(tcp_listeners);
+
+        // Rebuilt, not updated: a gatherer's STUN clients and TURN allocations are keyed by
+        // 5-tuples that no longer exist, so there is nothing in the old ones worth carrying over.
+        let local_addrs: Vec<SocketAddr> = self.udp_sockets.keys().copied().collect();
+        self.stun_gatherer = RTCStunGatherer::new(
+            local_addrs.clone(),
+            self.ice_servers.clone(),
+            self.ice_gather_policy,
+            Arc::clone(&runtime),
+        );
+        self.turn_relayer = RTCTurnRelayer::new(
+            local_addrs,
+            self.ice_servers.clone(),
+            self.ice_gather_policy,
+            self.turn_allocation_refresh_interval_cap,
+            runtime,
+            Arc::clone(&self.crypto_provider),
+        );
+
+        Ok(())
     }
 
     /// Mark the connection closing and wake any sender parked in send back-pressure.
@@ -1863,5 +2014,114 @@ mod tests {
 
         let sender = map.get(&channel_id).cloned().unwrap();
         assert!(!sender.is_closed());
+    }
+
+    #[test]
+    fn resolve_bind_addrs_keeps_concrete_addresses_and_deduplicates() {
+        let resolved =
+            resolve_bind_addrs(&["127.0.0.1:4444", "127.0.0.1:4444", "[::1]:0"]).unwrap();
+
+        assert_eq!(
+            resolved,
+            vec![
+                BindAddr {
+                    addr: "127.0.0.1:4444".parse().unwrap(),
+                    enumerated: false,
+                },
+                BindAddr {
+                    addr: "[::1]:0".parse().unwrap(),
+                    enumerated: false,
+                },
+            ],
+            "a configured address is bound as configured — loopback included"
+        );
+    }
+
+    #[test]
+    fn resolve_bind_addrs_reports_an_unresolvable_address() {
+        assert!(resolve_bind_addrs(&["not a socket address"]).is_err());
+    }
+
+    /// A wildcard never reaches `bind()` as a wildcard while the host has a usable interface —
+    /// that is the whole point of the expansion (webrtc#874). What the addresses *are* depends on
+    /// the machine, so this asserts the properties that must hold on any of them.
+    #[test]
+    fn resolve_bind_addrs_expands_a_wildcard_into_interface_addresses() {
+        let resolved = resolve_bind_addrs(&["0.0.0.0:5555"]).unwrap();
+        assert!(!resolved.is_empty(), "always at least the wildcard itself");
+
+        if resolved.len() == 1 && resolved[0].addr.ip().is_unspecified() {
+            // A host with no usable IPv4 interface: the wildcard is kept so the bind still
+            // succeeds, and it is *not* marked enumerated — failing to bind it is fatal.
+            assert!(!resolved[0].enumerated);
+            return;
+        }
+
+        for bind in &resolved {
+            assert!(bind.enumerated);
+            assert_eq!(
+                bind.addr.port(),
+                5555,
+                "the configured port is carried over"
+            );
+            assert!(bind.addr.is_ipv4(), "IPv4 wildcard expands to IPv4 only");
+            assert!(!bind.addr.ip().is_loopback());
+            assert!(!bind.addr.ip().is_unspecified());
+            assert!(!is_link_local(&bind.addr.ip()));
+        }
+    }
+
+    #[test]
+    fn expand_wildcard_deduplicates_against_configured_addresses() {
+        // Whatever the first entry expands to, the second must not add it again: two sockets on
+        // one interface is twice the candidates and twice the STUN traffic for one path.
+        let resolved = resolve_bind_addrs(&["0.0.0.0:0", "0.0.0.0:0"]).unwrap();
+        let mut unique: Vec<SocketAddr> = resolved.iter().map(|bind| bind.addr).collect();
+        let total = unique.len();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            total,
+            "duplicate bind addresses: {resolved:?}"
+        );
+    }
+
+    /// Deduplication must not be mistaken for "this host has no interface".
+    ///
+    /// An application that lists one interface explicitly *and* a wildcard expands to a set the
+    /// explicit entry already covers. Counting pushes rather than usable interfaces would read
+    /// that as an empty expansion and bind the wildcard alongside it — one extra socket, and a
+    /// `0.0.0.0` host candidate right next to the real ones.
+    #[test]
+    fn expand_wildcard_does_not_fall_back_when_deduplicated_away() {
+        let expanded = resolve_bind_addrs(&["0.0.0.0:6666"]).unwrap();
+        if expanded.iter().any(|bind| bind.addr.ip().is_unspecified()) {
+            return; // No usable IPv4 interface on this host; nothing to deduplicate against.
+        }
+
+        let configured = expanded[0].addr.to_string();
+        let resolved = resolve_bind_addrs(&[configured.as_str(), "0.0.0.0:6666"]).unwrap();
+
+        assert!(
+            !resolved.iter().any(|bind| bind.addr.ip().is_unspecified()),
+            "the wildcard came back despite every interface being covered: {resolved:?}"
+        );
+        assert_eq!(
+            resolved.len(),
+            expanded.len(),
+            "listing an interface explicitly must not change what gets bound"
+        );
+    }
+
+    #[test]
+    fn link_local_addresses_are_recognised() {
+        assert!(is_link_local(&"169.254.1.2".parse::<IpAddr>().unwrap()));
+        assert!(is_link_local(&"fe80::1".parse::<IpAddr>().unwrap()));
+        assert!(is_link_local(&"febf::1".parse::<IpAddr>().unwrap()));
+        assert!(!is_link_local(&"10.90.24.129".parse::<IpAddr>().unwrap()));
+        assert!(!is_link_local(&"169.253.1.2".parse::<IpAddr>().unwrap()));
+        assert!(!is_link_local(&"fec0::1".parse::<IpAddr>().unwrap()));
+        assert!(!is_link_local(&"2001:db8::1".parse::<IpAddr>().unwrap()));
     }
 }

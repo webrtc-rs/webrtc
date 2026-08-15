@@ -279,12 +279,29 @@ where
     }
 
     /// Configures the builder with the local UDP socket addresses to bind.
+    ///
+    /// The addresses are kept as given and resolved each time the sockets are bound — at startup
+    /// and again on every ICE-restart rebind — so a host name follows its DNS record and a
+    /// wildcard follows the machine's interfaces.
+    ///
+    /// A wildcard address (`0.0.0.0:port`, `[::]:port`) is not bound verbatim: it means *every
+    /// local interface of that family*, and one socket is bound per interface address that
+    /// exists at bind time, skipping loopback and link-local. This is what produces usable host
+    /// candidates — a wildcard socket's local address is `0.0.0.0`, which no peer can dial — and
+    /// what lets an ICE restart after a network handover pick up the interfaces the device has
+    /// *now* rather than the ones it had when the connection was built. Pass a concrete address
+    /// to bind exactly one interface. If no usable interface exists, the wildcard is bound as
+    /// given, so the connection can still come up over a relay.
+    ///
+    /// Port `0` picks an ephemeral port per socket, freshly on every rebind.
     pub fn with_udp_addrs(mut self, udp_addrs: Vec<A>) -> Self {
         self.udp_addrs = udp_addrs;
         self
     }
 
     /// Configures the builder with the local TCP socket addresses to bind.
+    ///
+    /// Resolved and expanded exactly like [`with_udp_addrs`](Self::with_udp_addrs).
     pub fn with_tcp_addrs(mut self, tcp_addrs: Vec<A>) -> Self {
         self.tcp_addrs = tcp_addrs;
         self
@@ -339,7 +356,15 @@ where
     }
 
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
-    pub async fn build(mut self) -> Result<impl PeerConnection> {
+    ///
+    /// `A: Send + 'static` because the configured addresses are handed to the driver unresolved
+    /// and re-resolved on every bind (see [`with_udp_addrs`](Self::with_udp_addrs)), so they live
+    /// as long as the connection. Owned addresses — `String`, `SocketAddr`, `(String, u16)`,
+    /// `&'static str` — all qualify; a `&str` borrowed from a local does not, so pass it owned.
+    pub async fn build(mut self) -> Result<impl PeerConnection>
+    where
+        A: Send + 'static,
+    {
         let runtime = if let Some(runtime) = self.runtime {
             runtime
         } else {
@@ -764,7 +789,7 @@ where
 {
     /// Create a new peer connection with a custom runtime
     #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
-    async fn new<A: ToSocketAddrs>(
+    async fn new<A: ToSocketAddrs + Send + 'static>(
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
@@ -777,20 +802,6 @@ where
         turn_allocation_refresh_interval_cap: Option<Duration>,
         crypto_provider: Arc<dyn crypto::RTCCryptoProvider>,
     ) -> Result<Self> {
-        // Resolve the configured addresses here — `A: ToSocketAddrs` is not necessarily `Send`,
-        // so it cannot cross into the driver future. Binding itself happens in the driver, which
-        // owns the sockets for their whole life: startup, and rebinding on ICE restart
-        // (webrtc#868). Keeping the *configured* addresses rather than the bound ones is what
-        // lets an ephemeral `:0` draw a fresh port on a rebind.
-        let mut resolved_udp_addrs = Vec::new();
-        for addr in udp_addrs {
-            resolved_udp_addrs.extend(addr.to_socket_addrs()?);
-        }
-        let mut resolved_tcp_addrs = Vec::new();
-        for addr in tcp_addrs {
-            resolved_tcp_addrs.extend(addr.to_socket_addrs()?);
-        }
-
         let configuration = core.get_configuration();
         let ice_servers = configuration.ice_servers().to_vec();
         let ice_gather_policy = configuration.ice_transport_policy();
@@ -837,8 +848,8 @@ where
         let run_driver = async move {
             let mut driver = PeerConnectionDriver::new(
                 inner,
-                resolved_udp_addrs,
-                resolved_tcp_addrs,
+                udp_addrs,
+                tcp_addrs,
                 mdns_mode,
                 ice_servers,
                 ice_gather_policy,
