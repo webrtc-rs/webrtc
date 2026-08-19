@@ -5,17 +5,20 @@
 ## What it shows
 
 1. Building a `PeerConnection` with the async `PeerConnectionBuilder` pattern used by the other async examples.
-2. Registering a custom `RtcpForwarderInterceptor` so RTCP is forwarded out of the interceptor chain.
-3. Receiving forwarded RTCP on the async side through `TrackRemoteEvent::OnRtcpPacket`.
-4. Printing RTCP packet headers and human-readable packet bodies as media flows.
+2. Calling `Registry::with_rtcp_readable()` so inbound RTCP reaches the application instead of stopping at the end of the chain.
+3. Adding a custom `RtcpForwarderInterceptor` that narrows what the application sees to keyframe requests — PLI and FIR — and drops the rest.
+4. Receiving those requests on the async side through `TrackRemoteEvent::OnRtcpPacket`.
+5. Printing their headers and human-readable bodies as media flows.
 
-## Why the custom interceptor is needed
+## Why the chain has to be asked
 
-By default, RTCP is consumed inside the interceptor chain for reports, NACK handling, congestion control, and similar
-logic.
-This example mirrors the sansio `rtc/examples/rtcp-processing` example by adding an outer interceptor that
-queues RTCP
-for application delivery before passing it down the normal chain.
+By default, inbound RTCP is consumed inside the interceptor chain for reports, NACK handling, congestion control, and
+similar logic — it is control traffic the interceptors act on, not media the application asked for.
+`Registry::with_rtcp_readable()` says otherwise, and then RTCP arrives alongside the media.
+
+It has to be asked for when the chain is built rather than arranged by an interceptor of your own: a chain is a flat
+list, and what an interceptor emits rejoins that list *behind* itself, where the stage that ends the inbound RTCP path
+is still ahead of it. This example mirrors the sansio `rtc/examples/rtcp-processing` example.
 
 ### Open rtcp-processing example page
 
@@ -69,5 +72,8 @@ println! ("{packet}");
 }
 ```
 
-Without the custom `RtcpForwarderInterceptor`, `TrackRemoteEvent::OnRtcpPacket` will not be emitted for normal inbound
-RTCP.
+Without `Registry::with_rtcp_readable()`, `TrackRemoteEvent::OnRtcpPacket` is not emitted at all: the chain ends the
+inbound RTCP path before the application. With it, plus the `RtcpForwarderInterceptor`, only PLI and FIR arrive —
+this peer is receive-only in the jsfiddle above, so it is the one *sending* keyframe requests and will print nothing
+until something downstream asks it for one. Drop the `.with(RtcpForwarderBuilder::new().build())` line to see every
+inbound RTCP packet instead.

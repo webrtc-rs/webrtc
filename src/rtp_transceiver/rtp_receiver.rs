@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use crate::media_stream::track_remote::TrackRemote;
+use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::transport::{DtlsRoute, DtlsTransport, DtlsTransportImpl};
-use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpReceiver;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchronizationSource};
@@ -14,40 +14,31 @@ use std::time::Instant;
 /// Concrete async rtp receiver implementation (generic over interceptor type).
 ///
 /// This wraps a rtp receiver and provides async send/receive APIs.
-pub(crate) struct RtpReceiverImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct RtpReceiverImpl {
     /// Unique identifier for this rtp receiver
     id: RTCRtpReceiverId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 
     track: Arc<dyn TrackRemote>,
 }
 
-impl<I> RtpReceiverImpl<I>
-where
-    I: Interceptor,
-{
+impl RtpReceiverImpl {
     /// Create a new rtp receiver wrapper
     pub(crate) fn new(
         id: RTCRtpReceiverId,
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
         track: Arc<dyn TrackRemote>,
     ) -> Self {
         Self { id, inner, track }
     }
 }
 
-impl<I> crate::sealed::Sealed for RtpReceiverImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for RtpReceiverImpl {}
 
 #[async_trait::async_trait]
-impl<I> RtpReceiver for RtpReceiverImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl RtpReceiver for RtpReceiverImpl {
     fn id(&self) -> RTCRtpReceiverId {
         self.id
     }

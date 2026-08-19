@@ -179,7 +179,7 @@ mod gro_buf_tests {
 // ---------------------------------------------------------------------------
 
 use crate::error::{Error, Result};
-use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
+use crate::peer_connection::PeerConnectionRef;
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::{
@@ -317,14 +317,11 @@ pub(crate) enum DtlsRoute {
 impl DtlsRoute {
     /// Walks to the core's DTLS view and copies out `f`'s result, so nothing borrowed escapes the
     /// lock.
-    fn with_dtls<I, T>(
+    fn with_dtls<T>(
         self,
-        peer_connection: &mut RTCPeerConnection<I>,
-        f: impl FnOnce(CoreDtlsTransport<'_, I>) -> T,
-    ) -> Option<T>
-    where
-        I: Interceptor,
-    {
+        peer_connection: &mut RTCPeerConnection,
+        f: impl FnOnce(CoreDtlsTransport<'_>) -> T,
+    ) -> Option<T> {
         match self {
             DtlsRoute::Sctp => peer_connection.sctp().map(|sctp| f(sctp.transport())),
             DtlsRoute::Sender(id) => match peer_connection.rtp_sender(id) {
@@ -340,25 +337,19 @@ impl DtlsRoute {
 }
 
 /// Concrete SCTP transport handle (generic over interceptor type).
-pub(crate) struct SctpTransportImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct SctpTransportImpl {
     id: RTCTransportId,
     dtls_id: RTCTransportId,
     ice_id: RTCTransportId,
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 }
 
-impl<I> SctpTransportImpl<I>
-where
-    I: Interceptor,
-{
+impl SctpTransportImpl {
     pub(crate) fn new(
         id: RTCTransportId,
         dtls_id: RTCTransportId,
         ice_id: RTCTransportId,
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
     ) -> Self {
         Self {
             id,
@@ -369,13 +360,10 @@ where
     }
 }
 
-impl<I> crate::sealed::Sealed for SctpTransportImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for SctpTransportImpl {}
 
 #[async_trait::async_trait]
-impl<I> SctpTransport for SctpTransportImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl SctpTransport for SctpTransportImpl {
     fn id(&self) -> RTCTransportId {
         self.id
     }
@@ -418,25 +406,19 @@ where
 }
 
 /// Concrete DTLS transport handle (generic over interceptor type).
-pub(crate) struct DtlsTransportImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct DtlsTransportImpl {
     id: RTCTransportId,
     ice_id: RTCTransportId,
     route: DtlsRoute,
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 }
 
-impl<I> DtlsTransportImpl<I>
-where
-    I: Interceptor,
-{
+impl DtlsTransportImpl {
     pub(crate) fn new(
         id: RTCTransportId,
         ice_id: RTCTransportId,
         route: DtlsRoute,
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
     ) -> Self {
         Self {
             id,
@@ -447,13 +429,10 @@ where
     }
 }
 
-impl<I> crate::sealed::Sealed for DtlsTransportImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for DtlsTransportImpl {}
 
 #[async_trait::async_trait]
-impl<I> DtlsTransport for DtlsTransportImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl DtlsTransport for DtlsTransportImpl {
     fn id(&self) -> RTCTransportId {
         self.id
     }
@@ -484,29 +463,19 @@ where
 }
 
 /// Concrete ICE transport handle (generic over interceptor type).
-pub(crate) struct IceTransportImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct IceTransportImpl {
     id: RTCTransportId,
     route: DtlsRoute,
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 }
 
-impl<I> IceTransportImpl<I>
-where
-    I: Interceptor,
-{
-    pub(crate) fn new(
-        id: RTCTransportId,
-        route: DtlsRoute,
-        inner: Arc<PeerConnectionRef<I>>,
-    ) -> Self {
+impl IceTransportImpl {
+    pub(crate) fn new(id: RTCTransportId, route: DtlsRoute, inner: Arc<PeerConnectionRef>) -> Self {
         Self { id, route, inner }
     }
 }
 
-impl<I> crate::sealed::Sealed for IceTransportImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for IceTransportImpl {}
 
 /// Reads one value from the ICE transport, walking to it and copying the result out under the
 /// lock.
@@ -524,10 +493,7 @@ macro_rules! read_ice {
 }
 
 #[async_trait::async_trait]
-impl<I> IceTransport for IceTransportImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl IceTransport for IceTransportImpl {
     fn id(&self) -> RTCTransportId {
         self.id
     }

@@ -87,7 +87,7 @@ use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
-pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
+pub use rtc::interceptor::Registry;
 
 // Argument types for `SettingEngine`'s DTLS/SRTP setters. Re-exported because `rtc` is a
 // private dependency of this crate: without these, calling `set_dtls_cipher_suites` or
@@ -178,11 +178,8 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 ///
 /// Configures the configuration, media engine, setting engine, interceptor registry,
 /// event handler, async runtime, and local socket addresses.
-pub struct PeerConnectionBuilder<A: ToSocketAddrs, I = NoopInterceptor>
-where
-    I: Interceptor,
-{
-    builder: RTCPeerConnectionBuilder<I>,
+pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
+    builder: RTCPeerConnectionBuilder,
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
@@ -194,7 +191,7 @@ where
     setting_engine: SettingEngine,
 }
 
-impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
+impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A> {
     fn default() -> Self {
         Self {
             builder: RTCPeerConnectionBuilder::new(),
@@ -212,17 +209,14 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
     }
 }
 
-impl<A: ToSocketAddrs> PeerConnectionBuilder<A, NoopInterceptor> {
+impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
     /// Creates a new `PeerConnectionBuilder`.
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<A: ToSocketAddrs, I> PeerConnectionBuilder<A, I>
-where
-    I: Interceptor + 'static,
-{
+impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
     /// Configures the builder with the specified WebRTC [`RTCConfiguration`].
     pub fn with_configuration(mut self, configuration: RTCConfiguration) -> Self {
         self.builder = self.builder.with_configuration(configuration);
@@ -243,27 +237,11 @@ where
 
     /// Configures the builder with the specified interceptor [`Registry`].
     ///
-    /// The chain's type parameter stays on the *builder* and never escapes [`Self::build`],
-    /// which hands back an opaque `impl PeerConnection` — so callers do not need
-    /// `rtc`'s [`Registry::boxed`](rtc::interceptor::Registry::boxed) to keep the interceptor
-    /// type out of their own structs. Pass the registry as-is.
-    pub fn with_interceptor_registry<P>(
-        self,
-        interceptor_registry: Registry<P>,
-    ) -> PeerConnectionBuilder<A, P>
-    where
-        P: Interceptor,
-    {
-        PeerConnectionBuilder {
-            builder: self.builder.with_interceptor_registry(interceptor_registry),
-            runtime: self.runtime,
-            handler: self.handler,
-            udp_addrs: self.udp_addrs,
-            tcp_addrs: self.tcp_addrs,
-            dedicated_reactor_pool_size: self.dedicated_reactor_pool_size,
-            data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
-            setting_engine: self.setting_engine,
-        }
+    /// A registry is a list rather than a nest of types, so it carries no type parameter and
+    /// neither does this builder. The chain is assembled by [`Self::build`].
+    pub fn with_interceptor_registry(mut self, interceptor_registry: Registry) -> Self {
+        self.builder = self.builder.with_interceptor_registry(interceptor_registry);
+        self
     }
 
     /// Configures the builder with the specified async [`Runtime`].
@@ -551,11 +529,8 @@ pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
 ///
 /// Not exposed directly — obtained as an opaque `impl PeerConnection` from
 /// [`PeerConnectionBuilder::build`].
-pub(crate) struct PeerConnectionImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
-    inner: Arc<PeerConnectionRef<I>>,
+pub(crate) struct PeerConnectionImpl {
+    inner: Arc<PeerConnectionRef>,
     driver_handle: Mutex<Option<Box<dyn JoinHandle>>>,
     /// Whether the driver runs on the shared bounded reactor pool (a task pinned to
     /// one pool thread) rather than the general async runtime. When true, `close()`
@@ -566,18 +541,15 @@ where
     dedicated_reactor: bool,
 }
 
-pub(crate) struct PeerConnectionRef<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
-    /// The sans-I/O peer connection core (uses default NoopInterceptor)
-    pub(crate) core: Mutex<RTCPeerConnection<I>>,
+pub(crate) struct PeerConnectionRef {
+    /// The sans-I/O peer connection core, holding whatever chain the registry built
+    pub(crate) core: Mutex<RTCPeerConnection>,
     /// Runtime for async operations
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
     /// RTP Transceivers
-    pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
+    pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl>>>,
     /// Unified channel for all outgoing driver events
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
     /// Coalescing write-flush gate (pion `awakeWriteLoop` equivalent).
@@ -699,10 +671,7 @@ fn ice_credentials(desc: &RTCSessionDescription) -> Option<(String, String)> {
 /// [`with_ice_credentials`](rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder::with_ice_credentials)
 /// pins them and `stage_ice_restart` seeds the restart from exactly those, so a connection with
 /// static credentials would restart without its local ufrag ever changing.
-fn will_restart_ice<I: Interceptor + 'static>(
-    core: &RTCPeerConnection<I>,
-    desc: &RTCSessionDescription,
-) -> bool {
+fn will_restart_ice(core: &RTCPeerConnection, desc: &RTCSessionDescription) -> bool {
     // `we_offer`: an answer means the restart, if any, is one we asked for, and was already armed
     // at `restart_ice()`/`create_offer()`. Arming again here would rebind a working transport at
     // the *next* negotiation, where the cause is far from the symptom.
@@ -732,10 +701,7 @@ fn will_restart_ice<I: Interceptor + 'static>(
 /// the send buffer run far ahead of the ~1 MB SCTP window.
 const WRITE_YIELD_INTERVAL: usize = 128;
 
-impl<I> PeerConnectionRef<I>
-where
-    I: Interceptor,
-{
+impl PeerConnectionRef {
     /// Marks that the next gathering pass must rebind the UDP sockets.
     ///
     /// A no-op unless the application asked for it through
@@ -783,14 +749,11 @@ where
     }
 }
 
-impl<I> PeerConnectionImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl PeerConnectionImpl {
     /// Create a new peer connection with a custom runtime
     #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
     async fn new<A: ToSocketAddrs + Send + 'static>(
-        core: RTCPeerConnection<I>,
+        core: RTCPeerConnection,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
         mdns_mode: MulticastDnsMode,
@@ -888,10 +851,7 @@ where
     }
 }
 
-impl<I> Drop for PeerConnectionImpl<I>
-where
-    I: Interceptor,
-{
+impl Drop for PeerConnectionImpl {
     fn drop(&mut self) {
         // A reactor-pool driver task only exits when its event loop returns, so a
         // connection dropped without an explicit `close()` would leave that task
@@ -920,13 +880,10 @@ where
     }
 }
 
-impl<I> crate::sealed::Sealed for PeerConnectionImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for PeerConnectionImpl {}
 
 #[async_trait::async_trait]
-impl<I> PeerConnection for PeerConnectionImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl PeerConnection for PeerConnectionImpl {
     async fn close(&self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
