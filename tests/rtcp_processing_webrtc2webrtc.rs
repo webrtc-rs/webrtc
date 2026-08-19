@@ -2,36 +2,43 @@
 //!
 //! This is the async-API port of the sansio `rtc/rtc/tests/rtcp_processing_interop.rs`.
 //!
-//! With an `RtcpForwarderInterceptor` installed as the outermost layer (the default chain
-//! otherwise consumes RTCP before the application can see it), it verifies **both**
-//! directions of RTCP delivery:
+//! With `Registry::with_rtcp_readable()` on the chain (inbound RTCP is otherwise consumed by
+//! the interceptors before the application can see it), it verifies **both** directions of RTCP
+//! delivery:
 //!
 //! * **Receiver side** — the receiving peer surfaces RTCP about the stream it is receiving
 //!   (the sender's Sender Reports) via `TrackRemoteEvent::OnRtcpPacket`.
-//! * **Sender side** — the sending peer surfaces RTCP feedback about its own sent stream
-//!   (the receiver's Receiver Reports / PLI / FIR) via the new `TrackLocal::poll` →
-//!   `TrackLocalEvent::OnRtcpPacket`. This relies on the endpoint handler tagging inbound
-//!   RTCP with a *sender's* track id and the driver routing it to the local track.
+//! * **Sender side** — the sending peer surfaces RTCP feedback about its own sent stream via the
+//!   new `TrackLocal::poll` → `TrackLocalEvent::OnRtcpPacket`. This relies on the endpoint
+//!   handler tagging inbound RTCP with a *sender's* track id and the driver routing it to the
+//!   local track.
+//!
+//! The sending peer additionally carries an [`RtcpForwarderInterceptor`], which narrows what
+//! reaches the application to keyframe requests. The receiver drives real PLIs, and the Receiver
+//! Reports it also emits are what proves the drop half: they reach the chain and must not appear.
 //!
 //! Topology: two async webrtc peers. The offerer sends a VP8 track; the answerer receives
 //! it. (See `examples/rtcp-processing` for the single-peer version.)
 
+use rtc::sansio;
+use rtc::shared::error::Error;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket, interceptor};
+use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_VP8, MediaEngine};
+use rtc::rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
 use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtc::rtcp::receiver_report::ReceiverReport;
+use rtc::rtcp::reception_report::ReceptionReport;
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
     RtpCodecKind,
 };
-use rtc::sansio;
-use rtc::shared::error::Error;
 
 use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use webrtc::media_stream::track_local::{TrackLocal, TrackLocalEvent};
@@ -46,74 +53,91 @@ mod common;
 use common::{block_on, interval, runtime, timeout};
 
 // ============================================================================
-// RTCP Forwarder Interceptor — surfaces inbound RTCP to the application.
+// RTCP Forwarder Interceptor — surfaces inbound keyframe requests, drops the rest.
 // ============================================================================
 
-struct RtcpForwarderBuilder<P> {
-    _phantom: std::marker::PhantomData<P>,
-}
+/// Builder for the [`RtcpForwarderInterceptor`].
+#[derive(Default)]
+struct RtcpForwarderBuilder;
 
-impl<P> Default for RtcpForwarderBuilder<P> {
-    fn default() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<P> RtcpForwarderBuilder<P> {
+impl RtcpForwarderBuilder {
     fn new() -> Self {
-        Self::default()
+        Self
     }
 
-    fn build(self) -> impl FnOnce(P) -> RtcpForwarderInterceptor<P> {
-        move |inner| RtcpForwarderInterceptor::new(inner)
-    }
-}
-
-#[derive(Interceptor)]
-struct RtcpForwarderInterceptor<P> {
-    #[next]
-    next: P,
-    read_queue: VecDeque<TaggedPacket>,
-}
-
-impl<P> RtcpForwarderInterceptor<P> {
-    fn new(next: P) -> Self {
-        Self {
-            next,
+    fn build(self) -> RtcpForwarderInterceptor {
+        RtcpForwarderInterceptor {
             read_queue: VecDeque::new(),
+            write_queue: VecDeque::new(),
         }
     }
 }
 
-#[interceptor]
-impl<P: Interceptor> RtcpForwarderInterceptor<P> {
-    #[overrides]
-    fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
-        if let Packet::Rtcp(rtcp_packets) = &msg.message {
-            self.read_queue.push_back(TaggedPacket {
-                now: msg.now,
-                transport: msg.transport,
-                message: Packet::Rtcp(rtcp_packets.clone()),
-            });
+/// Passes inbound keyframe requests — PLI and FIR — on to the application, and drops every other
+/// inbound RTCP packet.
+///
+/// The rest of the inbound RTCP is for the interceptors: a receiver report feeds the sender
+/// statistics, a NACK is answered by the responder, transport-wide feedback drives the bandwidth
+/// estimate. A keyframe request is the exception — only the application can answer it, because
+/// only the application knows what is producing the stream.
+///
+/// **Last** in the chain, so every interceptor has already seen the whole of the inbound RTCP
+/// before this one narrows it down; and it needs `Registry::with_rtcp_readable`, because what it
+/// passes on still has to get past the stage that ends the inbound RTCP path.
+struct RtcpForwarderInterceptor {
+    read_queue: VecDeque<TaggedPacket>,
+    write_queue: VecDeque<TaggedPacket>,
+}
+
+/// Whether an RTCP packet is a request for a keyframe.
+fn is_keyframe_request(packet: &Box<dyn rtc::rtcp::Packet>) -> bool {
+    let payload = packet.as_any();
+    payload.is::<PictureLossIndication>() || payload.is::<FullIntraRequest>()
+}
+
+impl sansio::Protocol<TaggedPacket, TaggedPacket, ()> for RtcpForwarderInterceptor {
+    type Rout = TaggedPacket;
+    type Wout = TaggedPacket;
+    type Eout = ();
+    type Error = Error;
+    type Time = std::time::Instant;
+
+    fn handle_read(&mut self, mut msg: TaggedPacket) -> Result<(), Self::Error> {
+        if let Packet::Rtcp(packets) = &msg.message.packet {
+            let requests: Vec<Box<dyn rtc::rtcp::Packet>> = packets
+                .iter()
+                .filter(|packet| is_keyframe_request(packet))
+                .cloned()
+                .collect();
+            if requests.is_empty() {
+                // Not the application's business, and the interceptors have already acted on it.
+                return Ok(());
+            }
+            msg.message.packet = Packet::Rtcp(requests);
         }
-        self.next.handle_read(msg)
+        self.read_queue.push_back(msg);
+        Ok(())
     }
 
-    #[overrides]
     fn poll_read(&mut self) -> Option<Self::Rout> {
-        if let Some(pkt) = self.read_queue.pop_front() {
-            return Some(pkt);
-        }
-        self.next.poll_read()
+        self.read_queue.pop_front()
     }
 
-    #[overrides]
-    fn close(&mut self) -> Result<(), Self::Error> {
-        self.read_queue.clear();
-        self.next.close()
+    fn handle_write(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        self.write_queue.push_back(msg);
+        Ok(())
     }
+
+    fn poll_write(&mut self) -> Option<Self::Wout> {
+        self.write_queue.pop_front()
+    }
+}
+
+impl Interceptor for RtcpForwarderInterceptor {
+    fn bind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn bind_remote_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_remote_stream(&mut self, _info: &StreamInfo) {}
 }
 
 // ============================================================================
@@ -162,8 +186,8 @@ impl PeerConnectionEventHandler for AnswererHandler {
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        // Read RTCP about the received stream. Without the RtcpForwarderInterceptor these
-        // OnRtcpPacket events never arrive (the default chain consumes the RTCP first).
+        // Read RTCP about the received stream. Without `with_rtcp_readable` these
+        // OnRtcpPacket events never arrive (the interceptors consume the RTCP first).
         let rtcp_count = Arc::clone(&self.rtcp_count);
         let poll_track = Arc::clone(&track);
         self.runtime.spawn(Box::pin(async move {
@@ -178,9 +202,11 @@ impl PeerConnectionEventHandler for AnswererHandler {
             }
         }));
 
-        // Periodically request a keyframe (PLI) from the sender. This deterministically gives
-        // the sender inbound RTCP feedback about its own stream, which it reads via
-        // TrackLocal::poll — without relying on periodic Receiver Report generation.
+        // Periodically request a keyframe (PLI) from the sender, alongside a Receiver Report
+        // about the same stream. This deterministically gives the sender inbound RTCP feedback
+        // about its own stream, which it reads via TrackLocal::poll — without relying on periodic
+        // report generation. The report is the packet the sender's forwarder has to *drop*, and
+        // sending it explicitly is what makes that assertion mean something.
         let media_ssrc = track.ssrcs().await.first().copied();
         self.runtime.spawn(Box::pin(async move {
             let mut ticker = interval(Duration::from_millis(200));
@@ -193,7 +219,19 @@ impl PeerConnectionEventHandler for AnswererHandler {
                     sender_ssrc: 0,
                     media_ssrc,
                 };
-                if track.write_rtcp(vec![Box::new(pli)]).await.is_err() {
+                let report = ReceiverReport {
+                    ssrc: 0,
+                    reports: vec![ReceptionReport {
+                        ssrc: media_ssrc,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                };
+                if track
+                    .write_rtcp(vec![Box::new(pli), Box::new(report)])
+                    .await
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -205,11 +243,16 @@ impl PeerConnectionEventHandler for AnswererHandler {
 // Helpers
 // ============================================================================
 
-/// A media engine with a single VP8 codec plus the default interceptors and the RTCP
-/// forwarder installed as the outermost layer.
+/// A media engine with a single VP8 codec plus the default interceptors, on a chain whose
+/// inbound RTCP is readable by the application.
+///
+/// `keyframe_requests_only` adds the [`RtcpForwarderInterceptor`], which narrows what the
+/// application sees to PLI and FIR. Only a peer that is *sending* can be asked for a keyframe, so
+/// the receiving peer leaves it off and reads the reports it is about.
 async fn build_peer(
     runtime: Arc<dyn Runtime>,
     handler: Arc<dyn PeerConnectionEventHandler>,
+    keyframe_requests_only: bool,
 ) -> Arc<dyn PeerConnection> {
     let mut media_engine = MediaEngine::default();
     media_engine
@@ -229,9 +272,18 @@ async fn build_peer(
         )
         .expect("register VP8");
 
-    let registry = register_default_interceptors(Registry::new(), &mut media_engine)
-        .expect("default interceptors");
-    let registry = registry.with(RtcpForwarderBuilder::new().build());
+    // Inbound RTCP is for the interceptors unless the chain asks for it; this test is about
+    // reading it, in both directions.
+    let registry =
+        register_default_interceptors(Registry::new().with_rtcp_readable(), &mut media_engine)
+            .expect("default interceptors");
+
+    // Application-most, so every interceptor has already seen the whole of the inbound RTCP.
+    let registry = if keyframe_requests_only {
+        registry.with(RtcpForwarderBuilder::new().build())
+    } else {
+        registry
+    };
 
     let pc = PeerConnectionBuilder::new()
         .with_media_engine(media_engine)
@@ -265,6 +317,8 @@ fn test_rtcp_processing_webrtc2webrtc() {
                 gather_complete_tx: off_gather_tx,
                 connected_tx: off_conn_tx,
             }),
+            // The offerer sends, so it is the peer that gets asked for keyframes.
+            true,
         )
         .await;
 
@@ -305,6 +359,9 @@ fn test_rtcp_processing_webrtc2webrtc() {
                 connected_tx: ans_conn_tx,
                 rtcp_count: Arc::clone(&rtcp_count),
             }),
+            // The answerer only receives; no keyframe request can ever reach it, so it reads the
+            // reports about the stream it is receiving instead.
+            false,
         )
         .await;
 
@@ -355,15 +412,27 @@ fn test_rtcp_processing_webrtc2webrtc() {
         }));
 
         // The offerer reads RTCP feedback about its OWN sent track via the local-track poll
-        // API (Receiver Reports the answerer emits about the stream it is receiving). This
-        // exercises `TrackLocal::poll` and the endpoint handler's sender-side RTCP surfacing.
+        // API — the keyframe requests the answerer sends. This exercises `TrackLocal::poll` and
+        // the endpoint handler's sender-side RTCP surfacing.
+        //
+        // The answerer sends a Receiver Report alongside every PLI, so non-keyframe RTCP
+        // certainly reaches this chain. `not_a_keyframe_request` counts any that gets past the
+        // forwarder — the drop half of "PLI and FIR only", asserted against traffic known to be
+        // arriving rather than against the absence of events.
         let local_rtcp_count = Arc::new(AtomicU32::new(0));
+        let not_a_keyframe_request = Arc::new(AtomicU32::new(0));
         {
             let local_rtcp_count = Arc::clone(&local_rtcp_count);
+            let not_a_keyframe_request = Arc::clone(&not_a_keyframe_request);
             let poll_track = Arc::clone(&video_track);
             runtime.spawn(Box::pin(async move {
                 while let Some(evt) = poll_track.poll().await {
-                    if let TrackLocalEvent::OnRtcpPacket(_packets) = evt {
+                    if let TrackLocalEvent::OnRtcpPacket(packets) = evt {
+                        for packet in &packets {
+                            if !is_keyframe_request(packet) {
+                                not_a_keyframe_request.fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
                         local_rtcp_count.fetch_add(1, Ordering::SeqCst);
                     }
                 }
@@ -388,12 +457,17 @@ fn test_rtcp_processing_webrtc2webrtc() {
         assert!(
             received >= 2,
             "answerer should surface RTCP about the received stream (got {received}); \
-             without the RtcpForwarderInterceptor the default chain consumes it"
+             without `with_rtcp_readable` the interceptors consume it"
         );
         assert!(
             local_received >= 1,
             "offerer should surface RTCP feedback about its SENT stream via TrackLocal::poll \
              (got {local_received})"
+        );
+        let leaked = not_a_keyframe_request.load(Ordering::SeqCst);
+        assert_eq!(
+            0, leaked,
+            "the forwarder passes PLI and FIR only, but let {leaked} other RTCP packet(s) through"
         );
 
         offerer.close().await.ok();

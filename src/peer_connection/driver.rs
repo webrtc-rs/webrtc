@@ -29,7 +29,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error, trace, warn};
 use rtc::ice::candidate::Candidate;
 use rtc::ice::mdns::MulticastDnsMode;
-use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::mdns::{MDNS_PORT, MulticastSocket};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
@@ -304,11 +303,8 @@ pub(crate) enum PeerConnectionDriverEvent {
 /// The driver for a peer connection
 ///
 /// Runs the event loop following rtc's EventLoop pattern with select!
-pub(crate) struct PeerConnectionDriver<I = NoopInterceptor, A = SocketAddr>
-where
-    I: Interceptor,
-{
-    inner: Arc<PeerConnectionRef<I>>,
+pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
+    inner: Arc<PeerConnectionRef>,
     stun_gatherer: RTCStunGatherer,
     turn_relayer: RTCTurnRelayer,
     tcp_transport: RTCTcpTransport,
@@ -353,9 +349,8 @@ where
     turn_allocation_refresh_interval_cap: Option<Duration>,
 }
 
-impl<I, A> PeerConnectionDriver<I, A>
+impl<A> PeerConnectionDriver<A>
 where
-    I: Interceptor + 'static,
     A: ToSocketAddrs,
 {
     /// Create a new driver for the given peer connection.
@@ -366,7 +361,7 @@ where
     /// [`udp_addrs`](Self::udp_addrs).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         mdns_mode: MulticastDnsMode,
@@ -1545,7 +1540,7 @@ where
     }
 
     async fn populate_track_remote_codings(
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
         receiver_id: RTCRtpReceiverId,
         ssrc: u32,
         track_remote: &Arc<dyn TrackRemote>,
@@ -1582,7 +1577,7 @@ where
         }
     }
 
-    async fn drain_core_writes(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedBytesMut> {
+    async fn drain_core_writes(inner: Arc<PeerConnectionRef>) -> Vec<TaggedBytesMut> {
         let mut writes = Vec::new();
         let mut core = inner.core.lock().await;
         while let Some(msg) = core.poll_write() {
@@ -1591,7 +1586,7 @@ where
         writes
     }
 
-    async fn drain_core_events(inner: Arc<PeerConnectionRef<I>>) -> Vec<RTCPeerConnectionEvent> {
+    async fn drain_core_events(inner: Arc<PeerConnectionRef>) -> Vec<RTCPeerConnectionEvent> {
         let mut events = Vec::new();
         let mut core = inner.core.lock().await;
         while let Some(event) = core.poll_event() {
@@ -1694,7 +1689,7 @@ where
     ///
     /// Always safe to call: media arrives over SRTP and is subject to none of SCTP's flow
     /// control, so nothing about data-channel back-pressure may gate it.
-    async fn drain_core_media(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
+    async fn drain_core_media(inner: Arc<PeerConnectionRef>) -> Vec<TaggedRTCMessage> {
         let mut messages = Vec::new();
         let mut core = inner.core.lock().await;
         while let Some(message) = core.poll_media_read() {
@@ -1709,7 +1704,7 @@ where
     /// back-pressure is applied: the messages stay in the core, its data-channel queue grows,
     /// the SCTP handler bounds its drain against that, bytes stay in the reassembly queue,
     /// `a_rwnd` falls and the peer slows down.
-    async fn drain_core_data(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
+    async fn drain_core_data(inner: Arc<PeerConnectionRef>) -> Vec<TaggedRTCMessage> {
         let mut messages = Vec::new();
         let mut core = inner.core.lock().await;
         while let Some(message) = core.poll_data_read() {

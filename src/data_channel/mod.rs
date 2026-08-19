@@ -47,7 +47,6 @@ use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt;
-use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -259,28 +258,22 @@ pub enum DataChannelEvent {
 /// Concrete async data channel implementation (generic over interceptor type).
 ///
 /// This wraps a data channel and provides async send/receive APIs.
-pub(crate) struct DataChannelImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct DataChannelImpl {
     /// Unique identifier for this data channel
     id: RTCDataChannelId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 
     /// event receiver
     evt_rx: Mutex<Receiver<DataChannelEvent>>,
 }
 
-impl<I> DataChannelImpl<I>
-where
-    I: Interceptor,
-{
+impl DataChannelImpl {
     /// Create a new data channel wrapper
     pub(crate) fn new(
         id: RTCDataChannelId,
-        inner: Arc<PeerConnectionRef<I>>,
+        inner: Arc<PeerConnectionRef>,
         evt_rx: Receiver<DataChannelEvent>,
     ) -> Self {
         Self {
@@ -308,10 +301,7 @@ where
     }
 }
 
-impl<I> Drop for DataChannelImpl<I>
-where
-    I: Interceptor,
-{
+impl Drop for DataChannelImpl {
     fn drop(&mut self) {
         if let Some(mut data_channels) = self.inner.data_channel_events_tx.try_lock() {
             data_channels.remove(&self.id);
@@ -319,13 +309,10 @@ where
     }
 }
 
-impl<I> crate::sealed::Sealed for DataChannelImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for DataChannelImpl {}
 
 #[async_trait::async_trait]
-impl<I> DataChannel for DataChannelImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl DataChannel for DataChannelImpl {
     /// label represents a label that can be used to distinguish this
     /// DataChannel object from other DataChannel objects. Scripts are
     /// allowed to create multiple DataChannel objects with the same label.

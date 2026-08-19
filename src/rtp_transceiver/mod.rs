@@ -42,9 +42,9 @@ pub(crate) mod rtp_sender;
 use crate::error::Error;
 use crate::media_stream::track_local::TrackLocalContext;
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
+use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::driver::DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY;
 use crate::peer_connection::transport::DtlsTransport;
-use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
 use crate::runtime::channel;
 use rtc::media_stream::MediaStreamId;
@@ -158,26 +158,20 @@ pub trait RtpTransceiver: crate::sealed::Sealed + Send + Sync + 'static {
 /// Concrete async rtp transceiver implementation (generic over interceptor type).
 ///
 /// This wraps a rtp transceiver and provides async send/receive APIs.
-pub(crate) struct RtpTransceiverImpl<I = NoopInterceptor>
-where
-    I: Interceptor,
-{
+pub(crate) struct RtpTransceiverImpl {
     /// Unique identifier for this rtp transceiver
     id: RTCRtpTransceiverId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef>,
 
     sender: Mutex<Option<Arc<dyn RtpSender>>>,
     receiver: Mutex<Option<Arc<dyn RtpReceiver>>>,
 }
 
-impl<I> RtpTransceiverImpl<I>
-where
-    I: Interceptor,
-{
+impl RtpTransceiverImpl {
     /// Create a new rtp transceiver wrapper
-    pub(crate) fn new(id: RTCRtpTransceiverId, inner: Arc<PeerConnectionRef<I>>) -> Self {
+    pub(crate) fn new(id: RTCRtpTransceiverId, inner: Arc<PeerConnectionRef>) -> Self {
         Self {
             id,
             inner,
@@ -233,13 +227,10 @@ where
     }
 }
 
-impl<I> crate::sealed::Sealed for RtpTransceiverImpl<I> where I: Interceptor + 'static {}
+impl crate::sealed::Sealed for RtpTransceiverImpl {}
 
 #[async_trait::async_trait]
-impl<I> RtpTransceiver for RtpTransceiverImpl<I>
-where
-    I: Interceptor + 'static,
-{
+impl RtpTransceiver for RtpTransceiverImpl {
     fn id(&self) -> RTCRtpTransceiverId {
         self.id
     }

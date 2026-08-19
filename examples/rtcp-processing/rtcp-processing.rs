@@ -1,7 +1,7 @@
 use clap::Parser;
 use env_logger::Target;
 use futures::FutureExt;
-use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket, interceptor};
+use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket};
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
 use rtc::peer_connection::configuration::media_engine::{
@@ -9,9 +9,11 @@ use rtc::peer_connection::configuration::media_engine::{
 };
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::transport::RTCIceServer;
+use rtc::rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
+use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RTCRtpCodecParameters, RtpCodecKind};
 use rtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
-use rtc::sansio;
+use rtc::sansio::Protocol;
 use rtc::shared::error::Error;
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
@@ -19,6 +21,7 @@ use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
@@ -34,88 +37,100 @@ use common::runtime;
 // ============================================================================
 // RTCP Forwarder Interceptor
 // ============================================================================
-//
-// This interceptor forwards RTCP packets to the application via poll_read().
-// By default, RTCP packets are consumed by the interceptor chain (for generating
-// statistics, NACK, etc.) and not forwarded to the application.
 
-/// Builder for the RtcpForwarderInterceptor.
-pub struct RtcpForwarderBuilder<P> {
-    _phantom: std::marker::PhantomData<P>,
-}
+/// Builder for the [`RtcpForwarderInterceptor`].
+#[derive(Default)]
+pub struct RtcpForwarderBuilder;
 
-impl<P> Default for RtcpForwarderBuilder<P> {
-    fn default() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<P> RtcpForwarderBuilder<P> {
+impl RtcpForwarderBuilder {
     /// Create a new builder.
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Build the interceptor.
-    pub fn build(self) -> impl FnOnce(P) -> RtcpForwarderInterceptor<P> {
-        move |inner| RtcpForwarderInterceptor::new(inner)
-    }
-}
-
-/// Interceptor that forwards RTCP packets to the application.
-///
-/// This interceptor intercepts incoming RTCP packets and queues them for
-/// `poll_read()`, allowing the application to receive and process RTCP packets.
-#[derive(Interceptor)]
-pub struct RtcpForwarderInterceptor<P> {
-    #[next]
-    next: P,
-    read_queue: VecDeque<TaggedPacket>,
-}
-
-impl<P> RtcpForwarderInterceptor<P> {
-    /// Create a new RtcpForwarderInterceptor.
-    fn new(next: P) -> Self {
-        Self {
-            next,
+    pub fn build(self) -> RtcpForwarderInterceptor {
+        RtcpForwarderInterceptor {
             read_queue: VecDeque::new(),
+            write_queue: VecDeque::new(),
         }
     }
 }
 
-#[interceptor]
-impl<P: Interceptor> RtcpForwarderInterceptor<P> {
-    #[overrides]
-    fn handle_read(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
-        // If this is an RTCP packet, queue a copy for the application
-        if let Packet::Rtcp(rtcp_packets) = &msg.message {
-            self.read_queue.push_back(TaggedPacket {
-                now: msg.now,
-                transport: msg.transport,
-                message: Packet::Rtcp(rtcp_packets.clone()),
-            });
+/// Passes inbound keyframe requests — PLI and FIR — on to the application, and drops every other
+/// inbound RTCP packet.
+///
+/// # Why only these
+///
+/// The rest of the inbound RTCP is for the interceptors: a receiver report feeds the sender
+/// statistics, a NACK is answered by the responder, transport-wide feedback drives the bandwidth
+/// estimate. Handing all of it to the application would give it a stream of control traffic it
+/// cannot act on, mixed in with its media.
+///
+/// A keyframe request is the exception: it is about a stream this program is producing or
+/// relaying, so the only thing that can answer it is the application.
+///
+/// # Where it belongs
+///
+/// **Last**, so every interceptor that reads RTCP has already seen the whole of it before this one
+/// narrows it down. It also needs [`Registry::with_rtcp_readable`], because what it passes on still
+/// has to get past the stage that ends the inbound RTCP path: on the belt, a packet an interceptor
+/// emits rejoins the list *behind* itself, so there is no position from which to forward past the
+/// end of the chain.
+pub struct RtcpForwarderInterceptor {
+    read_queue: VecDeque<TaggedPacket>,
+    write_queue: VecDeque<TaggedPacket>,
+}
+
+/// Whether an RTCP packet is a request for a keyframe.
+fn is_keyframe_request(packet: &Box<dyn rtc::rtcp::Packet>) -> bool {
+    let payload = packet.as_any();
+    payload.is::<PictureLossIndication>() || payload.is::<FullIntraRequest>()
+}
+
+impl Protocol<TaggedPacket, TaggedPacket, ()> for RtcpForwarderInterceptor {
+    type Rout = TaggedPacket;
+    type Wout = TaggedPacket;
+    type Eout = ();
+    type Error = Error;
+    type Time = Instant;
+
+    fn handle_read(&mut self, mut msg: TaggedPacket) -> Result<(), Self::Error> {
+        if let Packet::Rtcp(packets) = &msg.message.packet {
+            let requests: Vec<Box<dyn rtc::rtcp::Packet>> = packets
+                .iter()
+                .filter(|packet| is_keyframe_request(packet))
+                .cloned()
+                .collect();
+            if requests.is_empty() {
+                // Not the application's business, and the interceptors have already acted on it.
+                return Ok(());
+            }
+            msg.message.packet = Packet::Rtcp(requests);
         }
-        // Always pass to next interceptor for normal processing
-        self.next.handle_read(msg)
+        self.read_queue.push_back(msg);
+        Ok(())
     }
 
-    #[overrides]
     fn poll_read(&mut self) -> Option<Self::Rout> {
-        // First return any queued RTCP packets
-        if let Some(pkt) = self.read_queue.pop_front() {
-            return Some(pkt);
-        }
-        // Then check next interceptor
-        self.next.poll_read()
+        self.read_queue.pop_front()
     }
 
-    #[overrides]
-    fn close(&mut self) -> Result<(), Self::Error> {
-        self.read_queue.clear();
-        self.next.close()
+    fn handle_write(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        self.write_queue.push_back(msg);
+        Ok(())
     }
+
+    fn poll_write(&mut self) -> Option<Self::Wout> {
+        self.write_queue.pop_front()
+    }
+}
+
+impl Interceptor for RtcpForwarderInterceptor {
+    fn bind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn bind_remote_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_remote_stream(&mut self, _info: &StreamInfo) {}
 }
 
 // ============================================================================
@@ -199,7 +214,7 @@ impl PeerConnectionEventHandler for Handler {
                 match evt {
                     TrackRemoteEvent::OnRtcpPacket(rtcp_packets) => {
                         let batch = rtcp_count.fetch_add(1, Ordering::Relaxed) + 1;
-                        println!("=== RTCP Packet #{} (Track: {}) ===", batch, track_id);
+                        println!("=== Keyframe request #{} (Track: {}) ===", batch, track_id);
 
                         for (i, packet) in rtcp_packets.iter().enumerate() {
                             let header = packet.header();
@@ -310,14 +325,15 @@ async fn run(input_sdp_file: String) -> anyhow::Result<()> {
         RtpCodecKind::Audio,
     )?;
 
-    // Create interceptor registry with RTCP forwarder
-    let registry = Registry::new();
+    // Inbound RTCP is for the interceptors unless the chain asks for it. This example is about
+    // reading it, so it says otherwise — and then it arrives from `poll` alongside the media.
+    let registry = Registry::new().with_rtcp_readable();
 
     // Register default interceptors (NACK, reports, etc.)
     let registry = register_default_interceptors(registry, &mut media_engine)?;
 
-    // Add our RTCP forwarder interceptor as the outermost layer
-    // This ensures RTCP packets are captured before being consumed
+    // Application-most, so every interceptor has already seen the whole of the inbound RTCP
+    // before this one narrows it to keyframe requests.
     let registry = registry.with(RtcpForwarderBuilder::new().build());
 
     let config = RTCConfigurationBuilder::new()
