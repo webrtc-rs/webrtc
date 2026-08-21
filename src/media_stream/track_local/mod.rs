@@ -58,6 +58,11 @@ pub enum TrackLocalEvent {
     /// Fired when RTCP feedback about this sent track is received from the remote peer —
     /// e.g. Receiver Reports, or PLI/FIR keyframe requests. An SFU relays such feedback
     /// upstream to the publisher.
+    ///
+    /// Only for feedback an interceptor marked with `Attribute::DeliverToApplication`. Inbound
+    /// RTCP otherwise stops at the end of the chain, where the interceptors that act on it are, so
+    /// on a default chain this never fires — silence here means nothing vouched for a packet, not
+    /// that the remote sent none. The `rtcp-processing` example shows the interceptor that does it.
     OnRtcpPacket(Vec<Box<dyn rtcp::Packet>>),
 }
 

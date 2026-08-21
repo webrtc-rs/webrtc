@@ -61,7 +61,15 @@ pub enum TrackRemoteEvent {
 
     /// Fired when a new RTP packet is received on this track.
     OnRtpPacket(rtp::Packet),
-    /// Fired when new RTCP packets are received on this track.
+    /// Fired when new RTCP packets are received on this track **and an interceptor marked them
+    /// for the application**.
+    ///
+    /// Inbound RTCP is control traffic the interceptors act on — receiver reports feed the sender
+    /// statistics, NACKs are answered, transport-wide feedback drives the bandwidth estimate — so
+    /// it stops at the end of the chain by default and this never fires. To receive it, add an
+    /// interceptor that attaches `Attribute::DeliverToApplication` to the packets you want; the
+    /// `rtcp-processing` example does exactly that. Treat silence here as "nothing vouched for a
+    /// packet", not as "the remote sent none".
     OnRtcpPacket(Vec<Box<dyn rtcp::Packet>>),
 }
 

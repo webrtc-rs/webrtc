@@ -1,9 +1,11 @@
 use clap::Parser;
 use env_logger::Target;
 use futures::FutureExt;
-use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket};
+use rtc::interceptor::{Attribute, Interceptor, Packet, Slot, StreamInfo, TaggedPacket};
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
-use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::interceptor_registry::{
+    Registry, register_default_interceptors,
+};
 use rtc::peer_connection::configuration::media_engine::{
     MIME_TYPE_OPUS, MIME_TYPE_VP8, MediaEngine,
 };
@@ -73,10 +75,14 @@ impl RtcpForwarderBuilder {
 /// # Where it belongs
 ///
 /// **Last**, so every interceptor that reads RTCP has already seen the whole of it before this one
-/// narrows it down. It also needs [`Registry::with_rtcp_readable`], because what it passes on still
-/// has to get past the stage that ends the inbound RTCP path: on the belt, a packet an interceptor
+/// narrows it down.
+///
+/// What it keeps, it marks with [`Attribute::DeliverToApplication`]; inbound RTCP stops at the end
+/// of the chain otherwise. Re-emitting a copy would not help — on the belt, a packet an interceptor
 /// emits rejoins the list *behind* itself, so there is no position from which to forward past the
-/// end of the chain.
+/// end. Marking works because it does not try to: the packet finishes the walk and the stage that
+/// ends the inbound RTCP path reads the mark. It also keeps the judgement per-packet, which is the
+/// point — everything this does not mark still stops there.
 pub struct RtcpForwarderInterceptor {
     read_queue: VecDeque<TaggedPacket>,
     write_queue: VecDeque<TaggedPacket>,
@@ -107,6 +113,8 @@ impl Protocol<TaggedPacket, TaggedPacket, ()> for RtcpForwarderInterceptor {
                 return Ok(());
             }
             msg.message.packet = Packet::Rtcp(requests);
+            // Inbound RTCP stops at the end of the chain unless something vouches for it.
+            msg.message.add(Attribute::DeliverToApplication);
         }
         self.read_queue.push_back(msg);
         Ok(())
@@ -325,16 +333,13 @@ async fn run(input_sdp_file: String) -> anyhow::Result<()> {
         RtpCodecKind::Audio,
     )?;
 
-    // Inbound RTCP is for the interceptors unless the chain asks for it. This example is about
-    // reading it, so it says otherwise — and then it arrives from `poll` alongside the media.
-    let registry = Registry::new().with_rtcp_readable();
-
     // Register default interceptors (NACK, reports, etc.)
-    let registry = register_default_interceptors(registry, &mut media_engine)?;
+    let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
-    // Application-most, so every interceptor has already seen the whole of the inbound RTCP
-    // before this one narrows it to keyframe requests.
-    let registry = registry.with(RtcpForwarderBuilder::new().build());
+    // Inbound RTCP is for the interceptors unless one of them marks a packet for the application.
+    // Application-most, so every interceptor has already seen the whole of the inbound RTCP before
+    // this one narrows it to keyframe requests and marks those.
+    let registry = registry.with(Slot::from(14_000), RtcpForwarderBuilder::new().build());
 
     let config = RTCConfigurationBuilder::new()
         .with_ice_servers(vec![RTCIceServer {

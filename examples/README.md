@@ -48,8 +48,9 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   Simulcast streams. It then returns the media as 3 independent Tracks back to the sender.
 - ✅ [Swap Tracks](swap-tracks): The swap-tracks demonstrates how to swap multiple incoming tracks on a single outgoing
   track.
-- ✅ [RTCP Processing](rtcp-processing): The rtcp-processing example demonstrates how to ask for inbound RTCP with
-  `Registry::with_rtcp_readable()`, and how a custom RtcpForwarderInterceptor narrows it to keyframe requests.
+- ✅ [RTCP Processing](rtcp-processing): The rtcp-processing example demonstrates how a custom RtcpForwarderInterceptor
+  narrows inbound RTCP to keyframe requests and marks them with `Attribute::DeliverToApplication`, which is what gets
+  them past the end of the chain to the application.
 - ✅ [Save to Disk AV1](save-to-disk-av1): The save-to-disk-av1 is a simple application that shows how to save a video to
   disk using AV1.
 - ✅ [Play from Disk Playlist Control](play-from-disk-playlist-control): Streams Opus pages from multi or single track

@@ -19,7 +19,7 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use webrtc::data_channel::RTCDataChannelInit;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
@@ -507,10 +507,37 @@ async fn ice_restart_rebinds_a_fixed_port() -> Result<()> {
         Err(_) => anyhow::bail!("no re-gather after restart: the rebind failed"),
     }
 
-    let ports = local_ports(&pc_a).await?;
+    // Polled rather than read once, because "not yet" and "never" look identical in a single
+    // sample and only one of them is a bug.
+    //
+    // The `Complete` above is delivered through a capacity-1 `try_send`: a signal that arrives
+    // while one is already queued is dropped, so a stale one from the first generation can be what
+    // `recv` returns. Combined with `discard_local_candidates_during_ice_restart`, which empties
+    // the set until the new generation gathers, that made an early read report an empty set — a
+    // failure indistinguishable from the rebind never reclaiming the port.
+    //
+    // Waiting cannot mask the bug this test is for. A rebind that fails with `EADDRINUSE` never
+    // produces the port, so this still fails; it just takes the timeout to say so, and says which
+    // of the two happened.
+    let deadline = Duration::from_secs(5);
+    let started = Instant::now();
+    let ports = loop {
+        let ports = local_ports(&pc_a).await?;
+        if ports.contains(&fixed.port()) {
+            break ports;
+        }
+        if started.elapsed() >= deadline {
+            break ports;
+        }
+        runtime.sleep(Duration::from_millis(50)).await;
+    };
+
     assert!(
         ports.contains(&fixed.port()),
-        "the configured fixed port is bound again after the rebind: {ports:?}"
+        "the rebind did not reclaim the configured fixed port {} within {deadline:?}; \
+         the peer is advertising {ports:?}. An empty set here means the new sockets never bound \
+         — the old ones were still open, which is what this test exists to catch.",
+        fixed.port()
     );
 
     pc_a.close().await?;
