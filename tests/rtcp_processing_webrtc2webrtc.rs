@@ -2,9 +2,9 @@
 //!
 //! This is the async-API port of the sansio `rtc/rtc/tests/rtcp_processing_interop.rs`.
 //!
-//! With `Registry::with_rtcp_readable()` on the chain (inbound RTCP is otherwise consumed by
-//! the interceptors before the application can see it), it verifies **both** directions of RTCP
-//! delivery:
+//! With an interceptor on the chain marking inbound RTCP for the application (it is otherwise
+//! consumed by the interceptors before the application can see it), it verifies **both**
+//! directions of RTCP delivery:
 //!
 //! * **Receiver side** — the receiving peer surfaces RTCP about the stream it is receiving
 //!   (the sender's Sender Reports) via `TrackRemoteEvent::OnRtcpPacket`.
@@ -13,9 +13,10 @@
 //!   handler tagging inbound RTCP with a *sender's* track id and the driver routing it to the
 //!   local track.
 //!
-//! The sending peer additionally carries an [`RtcpForwarderInterceptor`], which narrows what
-//! reaches the application to keyframe requests. The receiver drives real PLIs, and the Receiver
-//! Reports it also emits are what proves the drop half: they reach the chain and must not appear.
+//! The two arms differ in which interceptor does the marking. [`DeliverAllRtcp`] vouches for every
+//! inbound RTCP packet; [`RtcpForwarderInterceptor`] vouches only for keyframe requests. The
+//! receiver drives real PLIs, and the Receiver Reports it also emits are what proves the drop
+//! half: under the narrowing arm they reach the chain and must not appear.
 //!
 //! Topology: two async webrtc peers. The offerer sends a VP8 track; the answerer receives
 //! it. (See `examples/rtcp-processing` for the single-peer version.)
@@ -27,9 +28,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use rtc::interceptor::{Interceptor, Packet, Registry, StreamInfo, TaggedPacket};
+use rtc::interceptor::{Attribute, Interceptor, Packet, Slot, StreamInfo, TaggedPacket};
 use rtc::media_stream::MediaStreamTrack;
-use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::interceptor_registry::{
+    Registry, register_default_interceptors,
+};
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_VP8, MediaEngine};
 use rtc::rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
 use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
@@ -82,11 +85,67 @@ impl RtcpForwarderBuilder {
 /// only the application knows what is producing the stream.
 ///
 /// **Last** in the chain, so every interceptor has already seen the whole of the inbound RTCP
-/// before this one narrows it down; and it needs `Registry::with_rtcp_readable`, because what it
-/// passes on still has to get past the stage that ends the inbound RTCP path.
+/// before this one narrows it down. What it keeps, it marks with `Attribute::DeliverToApplication`;
+/// that is what gets a packet past the stage which ends the inbound RTCP path, and it leaves
+/// everything unmarked stopping there as usual.
 struct RtcpForwarderInterceptor {
     read_queue: VecDeque<TaggedPacket>,
     write_queue: VecDeque<TaggedPacket>,
+}
+
+/// Hands every inbound RTCP packet to the application, for the arm of this test that wants the lot.
+///
+/// The counterpart to [`RtcpForwarderInterceptor`]: same mechanism, no predicate. Together they are
+/// what replaced a chain-wide "deliver inbound RTCP" switch — the choice is per-packet now, made by
+/// an interceptor that knows which packets the application can act on.
+#[derive(Default)]
+struct DeliverAllRtcp {
+    read_queue: VecDeque<TaggedPacket>,
+    write_queue: VecDeque<TaggedPacket>,
+}
+
+impl sansio::Protocol<TaggedPacket, TaggedPacket, ()> for DeliverAllRtcp {
+    type Rout = TaggedPacket;
+    type Wout = TaggedPacket;
+    type Eout = ();
+    type Error = Error;
+    type Time = std::time::Instant;
+
+    fn handle_read(&mut self, mut msg: TaggedPacket) -> Result<(), Self::Error> {
+        if matches!(msg.message.packet, Packet::Rtcp(_)) {
+            msg.message.add(Attribute::DeliverToApplication);
+        }
+        self.read_queue.push_back(msg);
+        Ok(())
+    }
+
+    fn poll_read(&mut self) -> Option<Self::Rout> {
+        self.read_queue.pop_front()
+    }
+
+    fn handle_write(&mut self, msg: TaggedPacket) -> Result<(), Self::Error> {
+        self.write_queue.push_back(msg);
+        Ok(())
+    }
+
+    fn poll_write(&mut self) -> Option<Self::Wout> {
+        self.write_queue.pop_front()
+    }
+
+    fn handle_timeout(&mut self, _now: std::time::Instant) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn poll_timeout(&mut self) -> Option<Self::Time> {
+        None
+    }
+}
+
+impl Interceptor for DeliverAllRtcp {
+    fn bind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_local_stream(&mut self, _info: &StreamInfo) {}
+    fn bind_remote_stream(&mut self, _info: &StreamInfo) {}
+    fn unbind_remote_stream(&mut self, _info: &StreamInfo) {}
 }
 
 /// Whether an RTCP packet is a request for a keyframe.
@@ -114,6 +173,8 @@ impl sansio::Protocol<TaggedPacket, TaggedPacket, ()> for RtcpForwarderIntercept
                 return Ok(());
             }
             msg.message.packet = Packet::Rtcp(requests);
+            // Inbound RTCP stops at the end of the chain unless something vouches for it.
+            msg.message.add(Attribute::DeliverToApplication);
         }
         self.read_queue.push_back(msg);
         Ok(())
@@ -186,8 +247,8 @@ impl PeerConnectionEventHandler for AnswererHandler {
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        // Read RTCP about the received stream. Without `with_rtcp_readable` these
-        // OnRtcpPacket events never arrive (the interceptors consume the RTCP first).
+        // Read RTCP about the received stream. Without an interceptor marking it for the
+        // application these OnRtcpPacket events never arrive (the interceptors consume it first).
         let rtcp_count = Arc::clone(&self.rtcp_count);
         let poll_track = Arc::clone(&track);
         self.runtime.spawn(Box::pin(async move {
@@ -272,17 +333,16 @@ async fn build_peer(
         )
         .expect("register VP8");
 
-    // Inbound RTCP is for the interceptors unless the chain asks for it; this test is about
-    // reading it, in both directions.
-    let registry =
-        register_default_interceptors(Registry::new().with_rtcp_readable(), &mut media_engine)
-            .expect("default interceptors");
+    let registry = register_default_interceptors(Registry::new(), &mut media_engine)
+        .expect("default interceptors");
 
-    // Application-most, so every interceptor has already seen the whole of the inbound RTCP.
+    // Inbound RTCP is for the interceptors unless one of them marks a packet for the application.
+    // Both arms mark; they differ in what they are willing to vouch for. Application-most either
+    // way, so every interceptor has already seen the whole of the inbound RTCP first.
     let registry = if keyframe_requests_only {
-        registry.with(RtcpForwarderBuilder::new().build())
+        registry.with(Slot::from(14_000), RtcpForwarderBuilder::new().build())
     } else {
-        registry
+        registry.with(Slot::from(14_000), DeliverAllRtcp::default())
     };
 
     let pc = PeerConnectionBuilder::new()
@@ -457,7 +517,7 @@ fn test_rtcp_processing_webrtc2webrtc() {
         assert!(
             received >= 2,
             "answerer should surface RTCP about the received stream (got {received}); \
-             without `with_rtcp_readable` the interceptors consume it"
+             with nothing marking it for the application the interceptors consume it"
         );
         assert!(
             local_received >= 1,
