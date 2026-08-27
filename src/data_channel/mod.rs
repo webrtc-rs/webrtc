@@ -53,7 +53,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 pub use rtc::data_channel::{
-    RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
+    RTCDataChannelHandle, RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage,
+    RTCDataChannelState,
 };
 
 /// Object-safe trait exposing all public DataChannel operations.
@@ -77,11 +78,11 @@ pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
     async fn negotiated(&self) -> Result<bool>;
     /// Returns the identifier for this data channel.
     ///
-    /// The value is initially null — which is what is returned if the id was not provided
-    /// at channel creation time and the DTLS role of the SCTP transport has not yet been
-    /// negotiated. Otherwise it returns the id that was either selected by the application
-    /// or generated. Once set to a non-null value it does not change.
-    fn id(&self) -> RTCDataChannelId;
+    /// `None` (null) is returned if no id was provided at channel creation time and the DTLS
+    /// role of the SCTP transport has not yet been negotiated (W3C section 6.1 step 18). Otherwise it
+    /// returns the id that was either selected by the application or generated. Once set to a
+    /// non-null value it does not change.
+    async fn id(&self) -> Option<RTCDataChannelId>;
     /// Returns the current state of this data channel.
     async fn ready_state(&self) -> Result<RTCDataChannelState>;
     /// Returns the threshold at which the buffered amount is considered to be *high*.
@@ -259,8 +260,12 @@ pub enum DataChannelEvent {
 ///
 /// This wraps a data channel and provides async send/receive APIs.
 pub(crate) struct DataChannelImpl {
-    /// Unique identifier for this data channel
-    id: RTCDataChannelId,
+    /// Stable handle for this data channel, assigned at creation and never changed. The stream
+    /// identifier (`id()`) is only assigned once the DTLS role is negotiated / SCTP connected.
+    handle: RTCDataChannelHandle,
+
+    /// Stream identifier; `None` until the core assigns one once SCTP is connected.
+    id: crate::runtime::primitives::Mutex<Option<RTCDataChannelId>>,
 
     /// Inner PeerConnection Reference
     inner: Arc<PeerConnectionRef>,
@@ -272,15 +277,26 @@ pub(crate) struct DataChannelImpl {
 impl DataChannelImpl {
     /// Create a new data channel wrapper
     pub(crate) fn new(
-        id: RTCDataChannelId,
+        handle: RTCDataChannelHandle,
         inner: Arc<PeerConnectionRef>,
         evt_rx: Receiver<DataChannelEvent>,
     ) -> Self {
         Self {
-            id,
+            handle,
+            id: crate::runtime::primitives::Mutex::new(None),
             inner,
             evt_rx: Mutex::new(evt_rx),
         }
+    }
+
+    /// The stable handle for this data channel.
+    pub(crate) fn handle(&self) -> RTCDataChannelHandle {
+        self.handle
+    }
+
+    /// Stores the stream identifier assigned by the core once SCTP is connected.
+    pub(crate) async fn set_id(&self, id: RTCDataChannelId) {
+        *self.id.lock().await = Some(id);
     }
 
     /// Park until the driver signals send-buffer progress, or a 50 ms liveness backstop
@@ -304,7 +320,15 @@ impl DataChannelImpl {
 impl Drop for DataChannelImpl {
     fn drop(&mut self) {
         if let Some(mut data_channels) = self.inner.data_channel_events_tx.try_lock() {
-            data_channels.remove(&self.id);
+            data_channels.remove(&self.handle);
+        }
+        if let Some(mut impls) = self.inner.data_channel_impls.try_lock() {
+            impls.remove(&self.handle);
+        }
+        // Best-effort reverse-map cleanup; `OnClose` covers the contended case.
+        if let Some(mut ids) = self.inner.data_channel_ids.try_lock() {
+            let handle = self.handle;
+            ids.retain(|_, h| *h != handle);
         }
     }
 }
@@ -320,7 +344,7 @@ impl DataChannel for DataChannelImpl {
         let mut peer_connection = self.inner.core.lock().await;
 
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .label()
             .to_owned())
@@ -331,7 +355,7 @@ impl DataChannel for DataChannelImpl {
     async fn ordered(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .ordered())
     }
@@ -341,7 +365,7 @@ impl DataChannel for DataChannelImpl {
     async fn max_packet_life_time(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .max_packet_life_time())
     }
@@ -351,7 +375,7 @@ impl DataChannel for DataChannelImpl {
     async fn max_retransmits(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .max_retransmits())
     }
@@ -361,7 +385,7 @@ impl DataChannel for DataChannelImpl {
     async fn protocol(&self) -> Result<String> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .protocol()
             .to_owned())
@@ -372,21 +396,21 @@ impl DataChannel for DataChannelImpl {
     async fn negotiated(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .negotiated())
     }
 
     // Documented on `DataChannel::id`.
-    fn id(&self) -> RTCDataChannelId {
-        self.id
+    async fn id(&self) -> Option<RTCDataChannelId> {
+        *self.id.lock().await
     }
 
     /// ready_state represents the state of the DataChannel object.
     async fn ready_state(&self) -> Result<RTCDataChannelState> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .ready_state())
     }
@@ -395,7 +419,7 @@ impl DataChannel for DataChannelImpl {
     async fn buffered_amount_high_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .buffered_amount_high_threshold())
     }
@@ -406,7 +430,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?
                 .set_buffered_amount_high_threshold(threshold);
         }
@@ -419,7 +443,7 @@ impl DataChannel for DataChannelImpl {
     async fn buffered_amount_low_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .buffered_amount_low_threshold())
     }
@@ -427,7 +451,7 @@ impl DataChannel for DataChannelImpl {
     async fn outstanding_bytes(&self) -> Result<usize> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
-            .data_channel(self.id)
+            .data_channel_handle(self.handle)
             .ok_or(Error::ErrDataChannelClosed)?
             .outstanding_bytes())
     }
@@ -438,7 +462,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?
                 .set_buffered_amount_low_threshold(threshold);
         }
@@ -458,7 +482,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             let mut dc = peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?;
             dc.send(self.inner.runtime.now(), data)?;
         }
@@ -476,7 +500,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             let mut dc = peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?;
             dc.send_text(self.inner.runtime.now(), text)?;
         }
@@ -506,7 +530,7 @@ impl DataChannel for DataChannelImpl {
             {
                 let mut peer_connection = self.inner.core.lock().await;
                 let outstanding = peer_connection
-                    .data_channel(self.id)
+                    .data_channel_handle(self.handle)
                     .ok_or(Error::ErrDataChannelClosed)?
                     .outstanding_bytes();
                 // Below the limit ⇒ writable. An empty buffer (`0 < limit`) also passes, so
@@ -532,7 +556,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             let mut dc = peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?;
             let outstanding = dc.outstanding_bytes();
             // Reject once the message would push outstanding bytes past the limit — but
@@ -558,7 +582,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             let mut dc = peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?;
             let outstanding = dc.outstanding_bytes();
             if outstanding != 0 && outstanding.saturating_add(text.len()) > limit {
@@ -596,7 +620,7 @@ impl DataChannel for DataChannelImpl {
         {
             let mut peer_connection = self.inner.core.lock().await;
             peer_connection
-                .data_channel(self.id)
+                .data_channel_handle(self.handle)
                 .ok_or(Error::ErrDataChannelClosed)?
                 .close()?;
         }
@@ -653,7 +677,7 @@ mod tests {
         async fn negotiated(&self) -> Result<bool> {
             unimplemented!()
         }
-        fn id(&self) -> RTCDataChannelId {
+        async fn id(&self) -> Option<RTCDataChannelId> {
             unimplemented!()
         }
         async fn ready_state(&self) -> Result<RTCDataChannelState> {
@@ -739,7 +763,7 @@ mod tests {
         rt.block_on(Box::pin(async {
             let (inner, _driver_event_rx) = new_test_peer_connection().await;
 
-            let channel_id = 0;
+            let channel_id = RTCDataChannelHandle::new(0);
             let (evt_tx, evt_rx) = channel::<DataChannelEvent>(1);
             inner
                 .data_channel_events_tx
@@ -754,7 +778,31 @@ mod tests {
                     .contains_key(&channel_id)
             );
 
-            let dc = DataChannelImpl::new(channel_id, inner.clone(), evt_rx);
+            // Pre-seed the reverse map and the cached id, then drop: both must be cleaned up.
+            let stream_id: RTCDataChannelId = 7;
+            inner
+                .data_channel_ids
+                .lock()
+                .await
+                .insert(stream_id, channel_id);
+            let dc = Arc::new(DataChannelImpl::new(channel_id, inner.clone(), evt_rx));
+            dc.set_id(stream_id).await;
+            // Register as a weak reference, matching `create_data_channel`.
+            inner
+                .data_channel_impls
+                .lock()
+                .await
+                .insert(channel_id, Arc::downgrade(&dc));
+            assert!(
+                inner
+                    .data_channel_impls
+                    .lock()
+                    .await
+                    .get(&channel_id)
+                    .is_some_and(|weak| weak.upgrade().is_some()),
+                "the registered weak ref must upgrade while the wrapper is alive"
+            );
+
             drop(dc);
 
             assert!(
@@ -763,6 +811,19 @@ mod tests {
                     .lock()
                     .await
                     .contains_key(&channel_id)
+            );
+            assert!(
+                !inner.data_channel_ids.lock().await.contains_key(&stream_id),
+                "dropping a DataChannelImpl must remove its stream-id reverse-map entry"
+            );
+            assert!(
+                inner
+                    .data_channel_impls
+                    .lock()
+                    .await
+                    .get(&channel_id)
+                    .is_none(),
+                "dropping a DataChannelImpl must remove its impl-map entry (breaking the cycle)"
             );
         }));
     }

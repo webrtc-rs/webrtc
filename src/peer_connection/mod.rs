@@ -56,7 +56,7 @@ use crate::peer_connection::transport::{SctpTransport, SctpTransportImpl};
 use log::error;
 use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
@@ -71,7 +71,7 @@ use driver::{
     PeerConnectionDriver,
 };
 
-use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
+use rtc::data_channel::{RTCDataChannelHandle, RTCDataChannelId, RTCDataChannelInit};
 use rtc::ice::mdns::MulticastDnsMode;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
@@ -586,8 +586,16 @@ pub(crate) struct PeerConnectionRef {
     /// `data_channel_send_buffer_limit` is configured — a `usize::MAX` (default) limit
     /// never parks on it.
     pub(crate) data_channel_backpressure: crate::runtime::Notify,
-    /// Channels for incoming data channel events
-    pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
+    /// Channels for incoming data channel events, keyed by the channel's stable handle.
+    pub(crate) data_channel_events_tx:
+        Mutex<HashMap<RTCDataChannelHandle, Sender<DataChannelEvent>>>,
+    /// Live wrappers keyed by handle, held weakly to break the cycle
+    /// `DataChannelImpl` -> `PeerConnectionRef` -> impl map.
+    pub(crate) data_channel_impls: Mutex<HashMap<RTCDataChannelHandle, Weak<DataChannelImpl>>>,
+    /// Reverse lookup from stream id to handle for routing core events.
+    pub(crate) data_channel_ids: Mutex<HashMap<RTCDataChannelId, RTCDataChannelHandle>>,
+    /// Handles created locally. Distinguishes dropped local channels from remote channels.
+    pub(crate) locally_created_handles: Mutex<HashSet<RTCDataChannelHandle>>,
     /// Channels for incoming track remote events
     #[allow(clippy::type_complexity)]
     pub(crate) track_remote_events_tx:
@@ -776,6 +784,9 @@ impl PeerConnectionImpl {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 data_channel_events_tx: Mutex::new(HashMap::new()),
+                data_channel_impls: Mutex::new(HashMap::new()),
+                data_channel_ids: Mutex::new(HashMap::new()),
+                locally_created_handles: Mutex::new(HashSet::new()),
                 track_remote_events_tx: Mutex::new(HashMap::new()),
                 track_local_events_tx: Mutex::new(HashMap::new()),
                 rtp_transceivers: Mutex::new(HashMap::new()),
@@ -1112,26 +1123,45 @@ impl PeerConnection for PeerConnectionImpl {
         label: &str,
         options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<dyn DataChannel>> {
-        // Create the data channel via the core
-        let channel_id = {
+        // Create the data channel via the core, addressed by its stable handle.
+        let (channel_handle, assigned_id) = {
             let mut core = self.inner.core.lock().await;
             let rtc_dc = core.create_data_channel(label, options)?;
-            rtc_dc.id()
+            // Record the handle as locally created before the driver sees its events.
+            self.inner
+                .locally_created_handles
+                .lock()
+                .await
+                .insert(rtc_dc.handle());
+            (rtc_dc.handle(), rtc_dc.id())
         };
 
         let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
         {
             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-            data_channels.insert(channel_id, evt_tx);
+            data_channels.insert(channel_handle, evt_tx);
+        }
+        if let Some(stream_id) = assigned_id {
+            let mut ids = self.inner.data_channel_ids.lock().await;
+            ids.insert(stream_id, channel_handle);
         }
 
         self.inner.wake_writes().await;
 
-        Ok(Arc::new(DataChannelImpl::new(
-            channel_id,
+        let impl_ = Arc::new(DataChannelImpl::new(
+            channel_handle,
             self.inner.clone(),
             evt_rx,
-        )))
+        ));
+        if let Some(stream_id) = assigned_id {
+            impl_.set_id(stream_id).await;
+        }
+        {
+            let mut impls = self.inner.data_channel_impls.lock().await;
+            impls.insert(channel_handle, Arc::downgrade(&impl_));
+        }
+
+        Ok(impl_)
     }
 
     /// Get the list of rtp sender
@@ -1374,6 +1404,9 @@ mod tests {
             data_channel_delivery_blocked: AtomicBool::new(false),
             data_channel_consumed: crate::runtime::Notify::new(),
             data_channel_events_tx: Mutex::new(HashMap::new()),
+            data_channel_impls: Mutex::new(HashMap::new()),
+            data_channel_ids: Mutex::new(HashMap::new()),
+            locally_created_handles: Mutex::new(HashSet::new()),
             track_remote_events_tx: Mutex::new(HashMap::new()),
             track_local_events_tx: Mutex::new(HashMap::new()),
             rtp_transceivers: Mutex::new(HashMap::new()),

@@ -6,7 +6,7 @@ use super::transport::stun_gatherer::{
     RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer,
 };
 use super::transport::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
-use crate::data_channel::{DataChannelEvent, DataChannelImpl, RTCDataChannelId};
+use crate::data_channel::{DataChannelEvent, DataChannelImpl, RTCDataChannelHandle};
 use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
@@ -124,13 +124,13 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day 
 /// by elapsed time catches every shape.
 const MIN_IMMEDIATE_TIMEOUT_INTERVAL: Duration = Duration::from_millis(1);
 
-/// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
+/// Insert `sender` for `channel_handle`, returning `true` if the channel should be announced.
 pub(crate) fn insert_data_channel_event_sender(
-    data_channels: &mut HashMap<RTCDataChannelId, Sender<DataChannelEvent>>,
-    channel_id: RTCDataChannelId,
+    data_channels: &mut HashMap<RTCDataChannelHandle, Sender<DataChannelEvent>>,
+    channel_handle: RTCDataChannelHandle,
     sender: Sender<DataChannelEvent>,
 ) -> bool {
-    match data_channels.entry(channel_id) {
+    match data_channels.entry(channel_handle) {
         Entry::Vacant(e) => {
             e.insert(sender);
             true
@@ -328,7 +328,7 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     ///
     /// Every variant goes in here, not just `OnMessage`: lifecycle events share the queue, so
     /// retaining uniformly is what preserves their order relative to the data around them.
-    pending_data_channel_events: HashMap<RTCDataChannelId, VecDeque<DataChannelEvent>>,
+    pending_data_channel_events: HashMap<RTCDataChannelHandle, VecDeque<DataChannelEvent>>,
     /// The addresses as the application configured them, held **unresolved** and re-resolved on
     /// every bind by [`resolve_bind_addrs`].
     ///
@@ -1101,51 +1101,83 @@ where
                 self.inner.handler.on_connection_state_change(state).await;
             }
             RTCPeerConnectionEvent::OnDataChannel(evt) => {
-                let channel_id = match evt {
-                    RTCDataChannelEvent::OnOpen(id) => id,
-                    RTCDataChannelEvent::OnError(id) => id,
-                    RTCDataChannelEvent::OnClosing(id) => id,
-                    RTCDataChannelEvent::OnClose(id) => id,
-                    RTCDataChannelEvent::OnBufferedAmountLow(id) => id,
-                    RTCDataChannelEvent::OnBufferedAmountHigh(id) => id,
+                // Overflow / exhaustion failures are keyed by handle, not stream id, so route
+                // them straight to the owning wrapper without touching the stream-id reverse map.
+                if let RTCDataChannelEvent::OnErrorByHandle(h)
+                | RTCDataChannelEvent::OnCloseByHandle(h) = &evt
+                {
+                    let ev = if matches!(evt, RTCDataChannelEvent::OnCloseByHandle(_)) {
+                        DataChannelEvent::OnClose
+                    } else {
+                        DataChannelEvent::OnError
+                    };
+                    // Upgrade the weak wrapper first, releasing the impl-map lock before we
+                    // re-borrow `self` to deliver the event.
+                    let live = {
+                        let impls = self.inner.data_channel_impls.lock().await;
+                        impls.get(h).and_then(|weak| weak.upgrade()).is_some()
+                    };
+                    if live {
+                        self.deliver_data_channel_event(*h, ev).await;
+                    }
+                    return;
+                }
+
+                // Map the stream-id-keyed core event to a handle.
+                let stream_id = match &evt {
+                    RTCDataChannelEvent::OnOpen(id) => *id,
+                    RTCDataChannelEvent::OnError(id) => *id,
+                    RTCDataChannelEvent::OnClosing(id) => *id,
+                    RTCDataChannelEvent::OnClose(id) => *id,
+                    RTCDataChannelEvent::OnBufferedAmountLow(id) => *id,
+                    RTCDataChannelEvent::OnBufferedAmountHigh(id) => *id,
                     _ => {
                         warn!("Ignoring unknown RTCDataChannelEvent variant");
                         return;
                     }
                 };
 
+                // Resolve the real handle from the core on OnOpen.
                 if let RTCDataChannelEvent::OnOpen(_) = &evt {
-                    let data_channel_exist = {
+                    let stream_id_for_open = stream_id;
+                    let resolve_handle = {
                         let mut core = self.inner.core.lock().await;
-                        core.data_channel(channel_id).is_some()
+                        core.data_channel(stream_id_for_open).map(|dc| dc.handle())
                     };
-
-                    if data_channel_exist {
-                        let (evt_tx, evt_rx) =
-                            channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
-
-                        let should_announce = {
-                            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-                            insert_data_channel_event_sender(&mut data_channels, channel_id, evt_tx)
-                        };
-
-                        if should_announce {
-                            let data_channel = Arc::new(DataChannelImpl::new(
-                                channel_id,
-                                self.inner.clone(),
-                                evt_rx,
-                            ));
-                            self.inner.handler.on_data_channel(data_channel).await;
-                        }
+                    if let Some(resolve_handle) = resolve_handle {
+                        let mut ids = self.inner.data_channel_ids.lock().await;
+                        ids.insert(stream_id_for_open, resolve_handle);
                     }
                 }
 
-                // overflow: retained — six lifecycle sends. They share the queue with
-                // `OnMessage` (see `handle_rtc_message`), so they go through the same
-                // retain-and-retry path and in the same order: a retained `OnClose` must not
-                // overtake messages that preceded it, which W3C's task-queue ordering
-                // requires.
-                let event = match evt {
+                // Use the updated reverse map, falling back to the core.
+                let handle = {
+                    let ids = self.inner.data_channel_ids.lock().await;
+                    ids.get(&stream_id).copied()
+                };
+                let handle = if let Some(handle) = handle {
+                    handle
+                } else {
+                    let mut core = self.inner.core.lock().await;
+                    let Some(dc) = core.data_channel(stream_id) else {
+                        return;
+                    };
+                    dc.handle()
+                };
+
+                // Upgrade the weak wrapper. Dead local channels are ignored; a dead remote
+                // channel is announced again only on the opening event.
+                let locally_created = self
+                    .inner
+                    .locally_created_handles
+                    .lock()
+                    .await
+                    .contains(&handle);
+                let impl_ = {
+                    let impls = self.inner.data_channel_impls.lock().await;
+                    impls.get(&handle).and_then(|weak| weak.upgrade())
+                };
+                let event = match &evt {
                     RTCDataChannelEvent::OnOpen(_) => DataChannelEvent::OnOpen,
                     RTCDataChannelEvent::OnError(_) => DataChannelEvent::OnError,
                     RTCDataChannelEvent::OnClosing(_) => DataChannelEvent::OnClosing,
@@ -1161,7 +1193,65 @@ where
                         return;
                     }
                 };
-                self.deliver_data_channel_event(channel_id, event).await;
+                let mut announced = None;
+                if let Some(impl_) = impl_ {
+                    // Set the assigned stream id on the cached impl so the synchronous `id()`
+                    // works; the event below is delivered to the wrapper's channel.
+                    impl_.set_id(stream_id).await;
+                } else if locally_created {
+                    debug!(
+                        "data channel {} was dropped locally; ignoring {:?}",
+                        handle, evt
+                    );
+                    return;
+                } else if matches!(event, DataChannelEvent::OnOpen) {
+                    // The application released the wrapper, so the open event re-announces it.
+                    let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+
+                    let should_announce = {
+                        let mut data_channels = self.inner.data_channel_events_tx.lock().await;
+                        insert_data_channel_event_sender(&mut data_channels, handle, evt_tx)
+                    };
+
+                    if should_announce {
+                        let data_channel =
+                            Arc::new(DataChannelImpl::new(handle, self.inner.clone(), evt_rx));
+                        data_channel.set_id(stream_id).await;
+                        let mut impls = self.inner.data_channel_impls.lock().await;
+                        impls.insert(handle, Arc::downgrade(&data_channel));
+                        drop(impls);
+                        self.inner
+                            .handler
+                            .on_data_channel(data_channel.clone())
+                            .await;
+                        // Keep the wrapper alive until the open event is delivered below.
+                        announced = Some(data_channel);
+                    }
+                } else if matches!(event, DataChannelEvent::OnClose) {
+                    // The application released the wrapper; keep the reverse map in step.
+                    let mut ids = self.inner.data_channel_ids.lock().await;
+                    ids.remove(&stream_id);
+                    return;
+                } else {
+                    // The application released the wrapper and the event is not (re)opening,
+                    // so there is no live receiver; drop it.
+                    return;
+                }
+
+                // OnClose removes the reverse map entry; other events refresh it.
+                let mut ids = self.inner.data_channel_ids.lock().await;
+                match event {
+                    DataChannelEvent::OnClose => {
+                        ids.remove(&stream_id);
+                    }
+                    _ => {
+                        ids.entry(stream_id).or_insert(handle);
+                    }
+                }
+                drop(ids);
+
+                self.deliver_data_channel_event(handle, event).await;
+                drop(announced);
             }
             RTCPeerConnectionEvent::OnTrack(evt) => {
                 let track_id = match &evt {
@@ -1336,12 +1426,20 @@ where
                 // promises delivery; this used to discard it on a full queue. Now the
                 // message is kept and the driver stops pulling reads from the core until the
                 // consumer drains, so back-pressure reaches SCTP's receive window and the
-                // peer throttles.
-                self.deliver_data_channel_event(
-                    channel_id,
-                    DataChannelEvent::OnMessage(dc_message),
-                )
-                .await;
+                // peer throttles. The core keys the message by stream id; map it to the
+                // channel handle for routing.
+                let handle = self
+                    .inner
+                    .data_channel_ids
+                    .lock()
+                    .await
+                    .get(&channel_id)
+                    .copied();
+                let Some(handle) = handle else {
+                    return;
+                };
+                self.deliver_data_channel_event(handle, DataChannelEvent::OnMessage(dc_message))
+                    .await;
             }
             RTCMessage::RtpPacket(track_id, packet) => {
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
@@ -1604,23 +1702,23 @@ where
     /// anything is retained.
     async fn deliver_data_channel_event(
         &mut self,
-        channel_id: RTCDataChannelId,
+        channel_handle: RTCDataChannelHandle,
         event: DataChannelEvent,
     ) {
         // Anything already retained for this channel must go first, or a later event would
         // overtake an earlier one — W3C queues `message` and `close` as tasks on the same
         // event loop, so a close must never arrive before data that preceded it.
-        if let Some(pending) = self.pending_data_channel_events.get_mut(&channel_id) {
+        if let Some(pending) = self.pending_data_channel_events.get_mut(&channel_handle) {
             pending.push_back(event);
             return;
         }
 
         let evt_tx = {
             let data_channels = self.inner.data_channel_events_tx.lock().await;
-            data_channels.get(&channel_id).cloned()
+            data_channels.get(&channel_handle).cloned()
         };
         let Some(evt_tx) = evt_tx else {
-            error!("Failed to get data_channel: {} for event", channel_id);
+            error!("Failed to get data_channel: {} for event", channel_handle);
             return;
         };
 
@@ -1629,7 +1727,7 @@ where
             Ok(()) => {}
             Err(TrySendError::Full(event)) => {
                 self.pending_data_channel_events
-                    .entry(channel_id)
+                    .entry(channel_handle)
                     .or_default()
                     .push_back(event);
                 self.inner
@@ -1638,7 +1736,7 @@ where
             }
             Err(TrySendError::Disconnected(_)) => {
                 // The application dropped its `DataChannel`; there is nobody to deliver to.
-                debug!("data channel {} has no live receiver", channel_id);
+                debug!("data channel {} has no live receiver", channel_handle);
             }
         }
     }
@@ -1649,7 +1747,7 @@ where
             return false;
         }
 
-        let senders: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> =
+        let senders: HashMap<RTCDataChannelHandle, Sender<DataChannelEvent>> =
             self.inner.data_channel_events_tx.lock().await.clone();
 
         for (channel_id, pending) in self.pending_data_channel_events.iter_mut() {
@@ -1978,8 +2076,8 @@ mod tests {
 
     #[test]
     fn insert_data_channel_event_sender_replaces_closed_sender() {
-        let mut map: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> = HashMap::new();
-        let channel_id = 0;
+        let mut map: HashMap<RTCDataChannelHandle, Sender<DataChannelEvent>> = HashMap::new();
+        let channel_id = RTCDataChannelHandle::new(0);
 
         let (old_tx, old_rx) = channel::<DataChannelEvent>(1);
         drop(old_rx);
@@ -1997,8 +2095,8 @@ mod tests {
 
     #[test]
     fn insert_data_channel_event_sender_skips_live_sender() {
-        let mut map: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> = HashMap::new();
-        let channel_id = 0;
+        let mut map: HashMap<RTCDataChannelHandle, Sender<DataChannelEvent>> = HashMap::new();
+        let channel_id = RTCDataChannelHandle::new(0);
 
         let (live_tx, _live_rx) = channel::<DataChannelEvent>(1);
         map.insert(channel_id, live_tx);
@@ -2009,6 +2107,259 @@ mod tests {
 
         let sender = map.get(&channel_id).cloned().unwrap();
         assert!(!sender.is_closed());
+    }
+
+    // Unit tests for data-channel event routing through `handle_rtc_event`.
+    #[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
+    mod data_channel_routing_tests {
+        use super::*;
+        use crate::data_channel::{DataChannel, RTCDataChannelInit};
+        use crate::peer_connection::new_test_peer_connection;
+        use crate::peer_connection::{
+            PeerConnection, PeerConnectionEventHandler, PeerConnectionImpl, PeerConnectionRef,
+        };
+        use crate::runtime::{Mutex, TryRecvError, default_runtime, timeout};
+        use rtc::peer_connection::RTCPeerConnectionBuilder;
+        use rtc::peer_connection::configuration::RTCIceTransportPolicy;
+        use std::collections::HashSet;
+        use std::sync::Mutex as StdMutex;
+        use std::sync::atomic::AtomicBool;
+
+        /// Records every channel announced through `on_data_channel`.
+        #[derive(Default)]
+        struct RecordingHandler {
+            announced: StdMutex<Vec<Arc<dyn DataChannel>>>,
+        }
+
+        #[async_trait::async_trait]
+        impl PeerConnectionEventHandler for RecordingHandler {
+            async fn on_data_channel(&self, data_channel: Arc<dyn DataChannel>) {
+                self.announced.lock().unwrap().push(data_channel);
+            }
+        }
+
+        async fn new_recording_peer_connection() -> (
+            Arc<PeerConnectionRef>,
+            Arc<RecordingHandler>,
+            crate::runtime::Receiver<PeerConnectionDriverEvent>,
+        ) {
+            let core = RTCPeerConnectionBuilder::new()
+                .build(Instant::now())
+                .unwrap();
+            let runtime = default_runtime().expect("test requires a runtime feature");
+            let recorded = Arc::new(RecordingHandler::default());
+            let handler: Arc<dyn PeerConnectionEventHandler> = recorded.clone();
+            let (driver_event_tx, driver_event_rx) =
+                crate::runtime::channel::<PeerConnectionDriverEvent>(1);
+
+            let inner = Arc::new(PeerConnectionRef {
+                core: Mutex::new(core),
+                runtime,
+                handler,
+                driver_event_tx,
+                write_pending: AtomicBool::new(false),
+                write_backpressure: std::sync::atomic::AtomicUsize::new(0),
+                closing: AtomicBool::new(false),
+                data_channel_send_buffer_limit: usize::MAX,
+                data_channel_backpressure: crate::runtime::Notify::new(),
+                data_channel_delivery_blocked: AtomicBool::new(false),
+                data_channel_consumed: crate::runtime::Notify::new(),
+                data_channel_events_tx: Mutex::new(HashMap::new()),
+                data_channel_impls: Mutex::new(HashMap::new()),
+                data_channel_ids: Mutex::new(HashMap::new()),
+                locally_created_handles: Mutex::new(HashSet::new()),
+                track_remote_events_tx: Mutex::new(HashMap::new()),
+                track_local_events_tx: Mutex::new(HashMap::new()),
+                rtp_transceivers: Mutex::new(HashMap::new()),
+                discard_local_candidates_during_ice_restart: false,
+                ice_restart_rebind_pending: AtomicBool::new(false),
+            });
+
+            (inner, recorded, driver_event_rx)
+        }
+
+        fn driver_for(inner: Arc<PeerConnectionRef>) -> PeerConnectionDriver {
+            PeerConnectionDriver::new(
+                inner,
+                Vec::new(),
+                Vec::new(),
+                MulticastDnsMode::Disabled,
+                Vec::new(),
+                RTCIceTransportPolicy::All,
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+                false,
+                None,
+            )
+        }
+
+        /// Dropping a DataChannel must not keep the connection alive.
+        #[test]
+        fn drop_data_channel_allows_peer_connection_drop() {
+            let rt = default_runtime().expect("test requires a runtime feature");
+            rt.block_on(Box::pin(async {
+                let (inner, _driver_event_rx) = new_test_peer_connection().await;
+                let pc = PeerConnectionImpl {
+                    inner: inner.clone(),
+                    driver_handle: Mutex::new(None),
+                    dedicated_reactor: false,
+                };
+                let dc = pc.create_data_channel("test", None).await.unwrap();
+
+                let weak_inner = Arc::downgrade(&inner);
+                drop(dc);
+                drop(pc);
+                drop(inner);
+
+                assert!(
+                    weak_inner.upgrade().is_none(),
+                    "no reference cycle through the data-channel wrapper"
+                );
+            }));
+        }
+
+        /// OnOpen routes to the freshly resolved handle, not a stale reverse-map entry.
+        #[test]
+        fn onopen_uses_freshly_resolved_handle() {
+            let rt = default_runtime().expect("test requires a runtime feature");
+            rt.block_on(Box::pin(async {
+                let (inner, recorded, _driver_event_rx) = new_recording_peer_connection().await;
+
+                // The core holds a real channel on stream id 5 (negotiated, so the id is known
+                // at creation). Its handle is allocated by the core (handle 0 for the first
+                // channel) and differs from the stale handle seeded below.
+                let real_handle = {
+                    let mut core = inner.core.lock().await;
+                    core.create_data_channel(
+                        "remote",
+                        Some(RTCDataChannelInit {
+                            negotiated: Some(5),
+                            ..Default::default()
+                        }),
+                    )
+                    .unwrap()
+                    .handle()
+                };
+
+                // Stale wrapper-side state: the reverse map aliases stream id 5 to a different,
+                // dead handle, and a live event sender (and impl) is registered under it.
+                let stale_handle = RTCDataChannelHandle::new(100);
+                assert_ne!(stale_handle, real_handle);
+                let (stale_tx, mut stale_rx) = channel::<DataChannelEvent>(1);
+                inner
+                    .data_channel_events_tx
+                    .lock()
+                    .await
+                    .insert(stale_handle, stale_tx);
+                let (_, stale_impl_rx) = channel::<DataChannelEvent>(1);
+                let stale_impl = Arc::new(DataChannelImpl::new(
+                    stale_handle,
+                    inner.clone(),
+                    stale_impl_rx,
+                ));
+                inner
+                    .data_channel_impls
+                    .lock()
+                    .await
+                    .insert(stale_handle, Arc::downgrade(&stale_impl));
+                inner.data_channel_ids.lock().await.insert(5, stale_handle);
+
+                // The core announces the channel open on stream id 5.
+                let mut driver = driver_for(inner.clone());
+                driver
+                    .handle_rtc_event(RTCPeerConnectionEvent::OnDataChannel(
+                        RTCDataChannelEvent::OnOpen(5),
+                    ))
+                    .await;
+
+                // The event must reach the fresh wrapper for the *real* handle, not the stale one.
+                assert!(
+                    matches!(stale_rx.try_recv(), Err(TryRecvError::Empty)),
+                    "OnOpen must not be delivered to the stale handle"
+                );
+
+                let first = {
+                    let announced = recorded.announced.lock().unwrap();
+                    assert_eq!(
+                        announced.len(),
+                        1,
+                        "exactly one wrapper is announced for the remote channel"
+                    );
+                    announced[0].clone()
+                };
+                let event = first.poll().await;
+                assert!(
+                    matches!(event, Some(DataChannelEvent::OnOpen)),
+                    "the newly announced wrapper receives the OnOpen event"
+                );
+
+                // And the reverse map now points at the freshly resolved handle.
+                let ids = inner.data_channel_ids.lock().await;
+                assert_eq!(ids.get(&5), Some(&real_handle));
+            }));
+        }
+
+        /// A post-SCTP channel's open event routes to the existing wrapper, with no duplicate.
+        #[test]
+        fn create_data_channel_after_sctp_no_duplicate_wrapper() {
+            let rt = default_runtime().expect("test requires a runtime feature");
+            rt.block_on(Box::pin(async {
+                let (inner, recorded, _driver_event_rx) = new_recording_peer_connection().await;
+                let pc = PeerConnectionImpl {
+                    inner: inner.clone(),
+                    driver_handle: Mutex::new(None),
+                    dedicated_reactor: false,
+                };
+
+                // A negotiated channel is the post-SCTP shape: id assigned at creation, wrapper
+                // maps populated by `create_data_channel`, and the caller holds the impl.
+                let dc = pc
+                    .create_data_channel(
+                        "post-sctp",
+                        Some(RTCDataChannelInit {
+                            negotiated: Some(5),
+                            ..Default::default()
+                        }),
+                    )
+                    .await
+                    .unwrap();
+
+                let handle = {
+                    let mut core = inner.core.lock().await;
+                    core.data_channel(5).unwrap().handle()
+                };
+
+                // The core announces the channel open (as it would once SCTP connects).
+                let mut driver = driver_for(inner.clone());
+                driver
+                    .handle_rtc_event(RTCPeerConnectionEvent::OnDataChannel(
+                        RTCDataChannelEvent::OnOpen(5),
+                    ))
+                    .await;
+
+                // Single wrapper: the caller's, keyed by the caller's handle.
+                let impls = inner.data_channel_impls.lock().await;
+                assert_eq!(impls.len(), 1, "no duplicate wrapper may be created");
+                let weak = impls
+                    .get(&handle)
+                    .expect("the caller's wrapper is registered under its handle");
+                assert!(
+                    weak.upgrade().is_some(),
+                    "the caller's wrapper remains alive"
+                );
+                drop(impls);
+
+                assert!(
+                    recorded.announced.lock().unwrap().is_empty(),
+                    "an already-wrapped local channel must not be re-announced"
+                );
+
+                // And the open event was delivered into the caller's own wrapper.
+                let event = timeout(&*rt, Duration::from_secs(1), dc.poll())
+                    .await
+                    .expect("OnOpen within 1s");
+                assert!(matches!(event, Some(DataChannelEvent::OnOpen)));
+            }));
+        }
     }
 
     #[test]

@@ -200,7 +200,7 @@ impl PeerConnectionEventHandler for TrickleHandler {
         let runtime = self.runtime.clone();
         runtime.spawn(Box::pin(async move {
             let label = dc.label().await.unwrap_or_default();
-            let id = dc.id();
+            let id = dc.id().await;
             let mut opened = false;
             let mut count = 0u32;
             let mut send_timer = Box::pin(sleep(Duration::from_secs(3)));
@@ -234,7 +234,7 @@ impl PeerConnectionEventHandler for TrickleHandler {
                 } else {
                     match dc.poll().await {
                         Some(DataChannelEvent::OnOpen) => {
-                            println!("Data channel '{label}'-'{id}' open");
+                            println!("Data channel '{label}'-'{id:?}' open");
                             opened = true;
                             send_timer = Box::pin(sleep(Duration::from_secs(3)));
                         }

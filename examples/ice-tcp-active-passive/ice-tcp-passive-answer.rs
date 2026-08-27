@@ -83,18 +83,18 @@ impl PeerConnectionEventHandler for AnswerHandler {
 
     async fn on_data_channel(&self, dc: Arc<dyn DataChannel>) {
         let label = dc.label().await.unwrap_or_default();
-        let id = dc.id();
-        println!("[Answer] New DataChannel: '{label}'-'{id}'");
+        let id = dc.id().await;
+        println!("[Answer] New DataChannel: '{label}'-'{id:?}'");
 
         self.runtime.spawn(Box::pin(async move {
             loop {
                 match dc.poll().await {
                     Some(DataChannelEvent::OnOpen) => {
-                        println!("[Answer] Data channel '{label}'-'{id}' is open!");
+                        println!("[Answer] Data channel '{label}'-'{id:?}' is open!");
                         break;
                     }
                     Some(DataChannelEvent::OnClose) | None => {
-                        println!("[Answer] Data channel '{label}'-'{id}' closed before opening.");
+                        println!("[Answer] Data channel '{label}'-'{id:?}' closed before opening.");
                         return;
                     }
                     _ => {}
@@ -112,7 +112,7 @@ impl PeerConnectionEventHandler for AnswerHandler {
                                 println!("[Answer] Message from DataChannel '{label}': '{text}'");
                             }
                             Some(DataChannelEvent::OnClose) | None => {
-                                println!("[Answer] Data channel '{label}'-'{id}' closed.");
+                                println!("[Answer] Data channel '{label}'-'{id:?}' closed.");
                                 break;
                             }
                             _ => {}

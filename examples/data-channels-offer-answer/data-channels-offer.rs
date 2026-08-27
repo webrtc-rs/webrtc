@@ -130,7 +130,7 @@ async fn async_main(cli: Cli) -> Result<()> {
                 return;
             }
         };
-        let id = data_channel.id();
+        let id = data_channel.id().await;
         let mut count = 0u32;
         let mut send_timer = Box::pin(sleep(Duration::from_secs(5)));
 
@@ -158,7 +158,7 @@ async fn async_main(cli: Cli) -> Result<()> {
             } else {
                 match data_channel.poll().await {
                     Some(DataChannelEvent::OnOpen) => {
-                        println!("Data channel '{label}'-'{id}' open");
+                        println!("Data channel '{label}'-'{id:?}' open");
                         opened = true;
                         send_timer = Box::pin(sleep(Duration::from_secs(5)));
                     }
@@ -168,7 +168,7 @@ async fn async_main(cli: Cli) -> Result<()> {
             }
         }
 
-        println!("exit loop for DataChannel '{label}'-'{id}'");
+        println!("exit loop for DataChannel '{label}'-'{id:?}'");
     }));
 
     // Create offer and wait for ICE gathering to complete (non-trickle)

@@ -73,18 +73,18 @@ impl PeerConnectionEventHandler for TestHandler {
                     return;
                 }
             };
-            let id = data_channel.id();
-            println!("New DataChannel {label} {id}");
+            let id = data_channel.id().await;
+            println!("New DataChannel {label} {id:?}");
 
             let done = Notify::new();
             while let Some(event) = data_channel.poll().await {
                 match event {
                     DataChannelEvent::OnOpen => {
-                        println!("Data channel '{label}'-'{id}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
+                        println!("Data channel '{label}'-'{id:?}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                         let data_channel = data_channel.clone();
                         let done_rx = done.clone();
                         runtime.spawn(Box::pin(async move {
-                            let id2 = data_channel.id();
+                            let id2 = data_channel.id().await;
                             let mut result = Result::<()>::Ok(());
                             let mut close_after = 5;
                             while result.is_ok() {
@@ -102,7 +102,7 @@ impl PeerConnectionEventHandler for TestHandler {
 
                                         close_after-=1;
                                         if close_after <= 0 {
-                                            println!("Sent times out. Closing data channel '{id2}'.");
+                                            println!("Sent times out. Closing data channel '{id2:?}'.");
                                             let _ = data_channel.close().await;
                                             break;
                                         }
@@ -112,7 +112,7 @@ impl PeerConnectionEventHandler for TestHandler {
                         }));
                     }
                     DataChannelEvent::OnClose => {
-                        println!("Data channel '{label}'-'{id}' closed.");
+                        println!("Data channel '{label}'-'{id:?}' closed.");
                         done.notify_waiters();
                         let _ = pc_done_tx.try_send(());
                         break;

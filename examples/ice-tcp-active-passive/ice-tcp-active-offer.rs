@@ -176,17 +176,17 @@ async fn async_main(cli: Cli) -> Result<()> {
     let dc = pc_arc.create_data_channel("data", None).await?;
 
     let label = dc.label().await.unwrap_or_default();
-    let id = dc.id();
+    let id = dc.id().await;
 
     runtime.spawn(Box::pin(async move {
         loop {
             match dc.poll().await {
                 Some(DataChannelEvent::OnOpen) => {
-                    println!("[Offer] Data channel '{label}'-'{id}' is open!");
+                    println!("[Offer] Data channel '{label}'-'{id:?}' is open!");
                     break;
                 }
                 Some(DataChannelEvent::OnClose) | None => {
-                    println!("[Offer] Data channel '{label}'-'{id}' closed before opening.");
+                    println!("[Offer] Data channel '{label}'-'{id:?}' closed before opening.");
                     return;
                 }
                 _ => {}
@@ -204,7 +204,7 @@ async fn async_main(cli: Cli) -> Result<()> {
                             println!("[Offer] Message from DataChannel '{label}': '{text}'");
                         }
                         Some(DataChannelEvent::OnClose) | None => {
-                            println!("[Offer] Data channel '{label}'-'{id}' closed.");
+                            println!("[Offer] Data channel '{label}'-'{id:?}' closed.");
                             break;
                         }
                         _ => {}

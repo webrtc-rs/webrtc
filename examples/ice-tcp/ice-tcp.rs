@@ -75,18 +75,18 @@ impl PeerConnectionEventHandler for IceTcpHandler {
 
     async fn on_data_channel(&self, dc: Arc<dyn DataChannel>) {
         let label = dc.label().await.unwrap_or_default();
-        let id = dc.id();
-        println!("New DataChannel: '{label}'-'{id}'");
+        let id = dc.id().await;
+        println!("New DataChannel: '{label}'-'{id:?}'");
 
         self.runtime.spawn(Box::pin(async move {
             loop {
                 match dc.poll().await {
                     Some(DataChannelEvent::OnOpen) => {
-                        println!("Data channel '{label}'-'{id}' is open!");
+                        println!("Data channel '{label}'-'{id:?}' is open!");
                         break;
                     }
                     Some(DataChannelEvent::OnClose) | None => {
-                        println!("Data channel '{label}'-'{id}' closed before opening.");
+                        println!("Data channel '{label}'-'{id:?}' closed before opening.");
                         return;
                     }
                     _ => {}
@@ -104,7 +104,7 @@ impl PeerConnectionEventHandler for IceTcpHandler {
                                 println!("Message from DataChannel '{label}': '{text}'");
                             }
                             Some(DataChannelEvent::OnClose) | None => {
-                                println!("Data channel '{label}'-'{id}' closed.");
+                                println!("Data channel '{label}'-'{id:?}' closed.");
                                 break;
                             }
                             _ => {}
