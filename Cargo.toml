@@ -190,6 +190,21 @@ path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
 bench = false
 
 [[example]]
+name = "save-to-disk-fec"
+path = "examples/save-to-disk-fec/save-to-disk-fec.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-fec"
+path = "examples/play-from-disk-fec/play-from-disk-fec.rs"
+bench = false
+
+[[example]]
+name = "bandwidth-estimation-from-disk"
+path = "examples/bandwidth-estimation-from-disk/bandwidth-estimation-from-disk.rs"
+bench = false
+
+[[example]]
 name = "save-to-disk-h26x"
 path = "examples/save-to-disk-h26x/save-to-disk-h26x.rs"
 bench = false
