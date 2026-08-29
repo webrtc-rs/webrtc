@@ -36,6 +36,7 @@ use webrtc::runtime::{Runtime, Sender, channel};
 
 mod common;
 use common::{block_on, runtime, sleep, timeout};
+use rtc::data_channel::RTCDataChannelId;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 
@@ -208,7 +209,7 @@ async fn run_test() -> Result<()> {
     let mut webrtc_connected = false;
     let mut message_sent = false;
     let mut rtc_data_channel_opened = false;
-    let mut rtc_dc_id: Option<u16> = None;
+    let mut rtc_dc_id: Option<RTCDataChannelId> = None;
     let mut webrtc_received = false;
     let mut rtc_received_echo = false;
 
