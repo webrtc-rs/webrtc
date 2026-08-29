@@ -28,6 +28,7 @@ use webrtc::runtime::{Runtime, Sender, channel};
 
 mod common;
 use common::{block_on, runtime, sleep, timeout};
+use rtc::data_channel::RTCDataChannelId;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 const TEST_MESSAGE: &str = "Hello before restart!";
@@ -180,7 +181,7 @@ async fn run_test() -> Result<()> {
     let mut buf = vec![0u8; 2000];
     let mut rtc_connected = false;
     let mut webrtc_connected = false;
-    let mut rtc_dc_id: Option<u16> = None;
+    let mut rtc_dc_id: Option<RTCDataChannelId> = None;
     let mut rtc_received: Vec<String> = Vec::new();
 
     log::info!("Waiting for initial connection...");
