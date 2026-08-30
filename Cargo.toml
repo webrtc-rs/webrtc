@@ -1,6 +1,6 @@
 [package]
 name = "webrtc"
-version = "0.20.3"
+version = "0.20.4"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2024"
 license = "MIT/Apache-2.0"
@@ -24,7 +24,7 @@ runtime-smol = ["dep:smol"]
 runtime-mock = []
 
 [dependencies]
-rtc = { version = "0.20.3", path = "rtc" }
+rtc = { version = "0.20.4", path = "rtc" }
 
 bytes = "1.12.0"
 async-trait = "0.1.89"
@@ -44,7 +44,7 @@ tokio = { version = "1.52.3", features = ["net", "time", "sync", "rt", "rt-multi
 smol = { version = "2.0.2", optional = true }
 
 [dev-dependencies]
-signal = { version = "0.20.3", path = "rtc/examples/signal", package = "rtc-signal" }
+signal = { version = "0.20.4", path = "rtc/examples/signal", package = "rtc-signal" }
 
 env_logger = "0.11.11"
 chrono = "0.4.45"
