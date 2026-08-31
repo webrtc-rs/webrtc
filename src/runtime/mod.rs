@@ -478,19 +478,16 @@ pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
 /// [`with_runtime`](crate::peer_connection::PeerConnectionBuilder::with_runtime); that
 /// also allows different connections in one process to use different runtimes.
 pub fn default_runtime() -> Option<Arc<dyn Runtime>> {
-    #[cfg(all(
-        feature = "runtime-tokio",
-        not(feature = "runtime-smol"),
-        not(feature = "runtime-mock")
-    ))]
+    // The arms below are a *priority order*, not a mutual exclusion: the runtime features are
+    // additive, so Cargo feature unification can switch several on at once and every
+    // combination must still select exactly one arm. Requiring `not(...)` of the other
+    // features on every arm — as this once did — leaves no arm active whenever two are
+    // enabled, and the function then falls off the end and fails to compile.
+    #[cfg(feature = "runtime-tokio")]
     {
         Some(Arc::new(TokioRuntime))
     }
-    #[cfg(all(
-        not(feature = "runtime-tokio"),
-        feature = "runtime-smol",
-        not(feature = "runtime-mock")
-    ))]
+    #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
     {
         Some(Arc::new(SmolRuntime))
     }

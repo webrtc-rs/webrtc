@@ -80,8 +80,15 @@ pub enum TrackRemoteEvent {
 #[async_trait::async_trait]
 pub trait TrackRemote: Track {
     /// Writes RTCP feedback packets to the remote track sender.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error once the peer connection carrying this track is gone.
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()>;
 
     /// Polls for the next event on the remote track.
+    ///
+    /// Returns `None` once the track has ended and no events remain, so a
+    /// `while let Some(event) = track.poll().await` loop terminates on its own.
     async fn poll(&self) -> Option<TrackRemoteEvent>;
 }

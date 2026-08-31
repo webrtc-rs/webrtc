@@ -35,7 +35,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! webrtc = { version = "0.20", default-features = false, features = ["runtime-smol"] }
+//! webrtc = { version = "0.21", default-features = false, features = ["runtime-smol"] }
 //! ```
 //!
 //! Additional runtimes (async-std, embassy) are on the roadmap behind the same
@@ -52,7 +52,7 @@
 //! | [`runtime`] | The [`Runtime`](crate::runtime::Runtime) trait, for supplying your own executor |
 //! | [`error`] | [`Error`](crate::error::Error) and [`Result`](crate::error::Result), re-exported so you never import from `rtc-shared` directly |
 //!
-//! Beyond the Quick Start below, the repository ships [35 runnable
+//! Beyond the Quick Start below, the repository ships [39 runnable
 //! examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) covering data
 //! channels, media playback and recording, simulcast, ICE restart, and insertable streams.
 //!

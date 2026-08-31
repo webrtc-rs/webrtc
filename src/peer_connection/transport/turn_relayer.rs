@@ -113,7 +113,7 @@ impl RTCTurnRelayer {
         // construction (the sockets are shared with host candidates), so a teardown here
         // means the following `gather()` re-`Allocate`s on exactly the same 5-tuple. The
         // server still holds the previous allocation for it and answers **437 (Allocation
-        // Mismatch)** per RFC 5766 §6.2, and the restart gathers no relay candidate at all
+        // Mismatch)** per RFC 8656 §7.2, and the restart gathers no relay candidate at all
         // (issue #835).
         //
         // An allocation is a 5-tuple resource, independent of the credential that created

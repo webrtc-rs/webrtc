@@ -128,7 +128,7 @@ pub use rtc::peer_connection::{
 /// This trait defines callbacks that are invoked when various WebRTC events occur.
 /// All methods are async and have default no-op implementations.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```no_run
 /// use webrtc::peer_connection::{PeerConnectionEventHandler, RTCPeerConnectionIceEvent};
@@ -419,7 +419,7 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
 /// let pc: Arc<dyn PeerConnection> = Arc::new(builder.build().await?);
 /// ```
 ///
-/// # Example
+/// # Examples
 ///
 /// ```no_run
 /// use webrtc::peer_connection::{RTCConfigurationBuilder, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
@@ -443,71 +443,258 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
 /// ```
 #[async_trait::async_trait]
 pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
-    /// Close the peer connection
+    /// Closes the peer connection and stops its background driver.
+    ///
+    /// Idempotent: closing an already-closed connection succeeds. Pending
+    /// [`DataChannel::send`] calls blocked awaiting
+    /// capacity are woken with [`Error::ErrDataChannelClosed`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the driver could not be reached to perform the shutdown.
+    ///
+    /// # Specification
+    ///
+    /// See [close](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close)
     async fn close(&self) -> Result<()>;
-    /// Create an SDP offer
+
+    /// Creates an SDP offer describing this connection's media and data channels.
+    ///
+    /// Free of side effects on the connection's state, except that a pending
+    /// [`restart_ice`](Self::restart_ice) request is consumed here: the *next* offer restarts
+    /// ICE, and the one after it does not. The offer is not applied until it is passed to
+    /// [`set_local_description`](Self::set_local_description).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, or if the SDP cannot be generated.
+    ///
+    /// # Specification
+    ///
+    /// See [createOffer](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-createoffer)
     async fn create_offer(&self, options: Option<RTCOfferOptions>)
     -> Result<RTCSessionDescription>;
-    /// Create an SDP answer
+
+    /// Creates an SDP answer to a remote offer.
+    ///
+    /// Requires that [`set_remote_description`](Self::set_remote_description) has already been
+    /// called with an offer. `options` is accepted for forward compatibility and currently
+    /// unused.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no remote description has been set, if the connection is closed, if
+    /// the signaling state is neither `have-remote-offer` nor `have-local-pranswer`, or if the
+    /// SDP cannot be generated.
+    ///
+    /// # Specification
+    ///
+    /// See [createAnswer](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-createanswer)
     async fn create_answer(
         &self,
         options: Option<RTCAnswerOptions>,
     ) -> Result<RTCSessionDescription>;
-    /// Set the local description
+
+    /// Applies a local description, advancing the signaling state.
+    ///
+    /// `Offer` moves `stable` → `have-local-offer`; `Answer` moves `have-remote-offer` →
+    /// `stable`; `Pranswer` moves `have-remote-offer` → `have-local-pranswer`. Applying a local
+    /// answer is what activates the transceivers and starts SCTP. An empty SDP string re-uses
+    /// the last offer or answer this connection generated (RFC 9429 §5.4).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, if the description's type is wrong for the
+    /// current signaling state, or if its SDP cannot be parsed or applied.
+    ///
+    /// # Specification
+    ///
+    /// See [setLocalDescription](https://www.w3.org/TR/webrtc/#dom-peerconnection-setlocaldescription)
     async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()>;
-    /// Get the local description
+
+    /// Returns the description currently in effect locally: the pending one if a negotiation is
+    /// in progress, otherwise the current one.
     async fn local_description(&self) -> Option<RTCSessionDescription>;
-    /// Get current local description
+
+    /// Returns the last local description that was successfully negotiated, ignoring any
+    /// in-progress negotiation.
     async fn current_local_description(&self) -> Option<RTCSessionDescription>;
-    /// Get pending local description
+
+    /// Returns the local description of an in-progress negotiation, or `None` when none is in
+    /// progress.
     async fn pending_local_description(&self) -> Option<RTCSessionDescription>;
+
     /// Returns whether the remote peer supports trickle ICE.
+    ///
+    /// Read from the remote description's `ice-options` attribute (RFC 8838, RFC 9429 §4.1.17).
+    /// `None` until a remote description has been set — that is "unknown", not "unsupported".
     async fn can_trickle_ice_candidates(&self) -> Option<bool>;
-    /// Set the remote description
+
+    /// Applies a remote description received over your signaling channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, if the SDP cannot be parsed, or if the
+    /// media engine cannot be updated from it.
+    ///
+    /// # Specification
+    ///
+    /// See [setRemoteDescription](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setremotedescription!overload-1)
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()>;
-    /// Get the remote description
+
+    /// Returns the description currently in effect for the remote peer: the pending one if a
+    /// negotiation is in progress, otherwise the current one.
     async fn remote_description(&self) -> Option<RTCSessionDescription>;
-    /// Get current remote description
+
+    /// Returns the last remote description that was successfully negotiated, ignoring any
+    /// in-progress negotiation.
     async fn current_remote_description(&self) -> Option<RTCSessionDescription>;
-    /// Get pending remote description
+
+    /// Returns the remote description of an in-progress negotiation, or `None` when none is in
+    /// progress.
     async fn pending_remote_description(&self) -> Option<RTCSessionDescription>;
-    /// Add a remote ICE candidate
+
+    /// Adds a remote ICE candidate received over your signaling channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no remote description has been set yet, or if the candidate string
+    /// cannot be parsed.
+    ///
+    /// # Specification
+    ///
+    /// See [addIceCandidate](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addicecandidate!overload-1)
     async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()>;
-    /// Trigger an ICE restart
+
+    /// Requests that the next offer restart ICE.
+    ///
+    /// Takes effect on the next [`create_offer`](Self::create_offer), which advertises fresh ICE
+    /// credentials; the restart itself is applied by
+    /// [`set_local_description`](Self::set_local_description). Unlike the Sans-I/O core, local
+    /// candidates are re-gathered automatically by the driver.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the driver could not be reached.
+    ///
+    /// # Specification
+    ///
+    /// See [restartIce](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-restartice)
     async fn restart_ice(&self) -> Result<()>;
-    /// Get the current configuration
+
+    /// Returns the configuration currently in effect for this connection.
     async fn get_configuration(&self) -> RTCConfiguration;
-    /// Update the configuration
+
+    /// Updates the configuration of this connection.
+    ///
+    /// Only the fields the W3C algorithm permits changing after construction are applied.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, or if the new configuration changes the
+    /// peer identity or the number of certificates.
+    ///
+    /// # Specification
+    ///
+    /// See [setConfiguration](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setconfiguration)
     async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()>;
-    /// Create a data channel
+
+    /// Creates a data channel.
+    ///
+    /// The channel is not usable immediately: unless it was negotiated out-of-band, its SCTP
+    /// stream is established by the in-band DCEP handshake. Wait for
+    /// [`DataChannelEvent::OnOpen`], or use
+    /// [`DataChannel::writable`], before sending.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, or if the label or sub-protocol is longer
+    /// than the DCEP OPEN message can carry.
+    ///
+    /// # Specification
+    ///
+    /// See [createDataChannel](https://www.w3.org/TR/webrtc/#dom-peerconnection-createdatachannel)
     async fn create_data_channel(
         &self,
         label: &str,
         options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<dyn DataChannel>>;
-    /// Get the list of rtp sender
+
+    /// Returns this connection's RTP senders. Empty if the connection is gone.
     async fn get_senders(&self) -> Vec<Arc<dyn RtpSender>>;
-    /// Get the list of rtp receiver
+
+    /// Returns this connection's RTP receivers. Empty if the connection is gone.
     async fn get_receivers(&self) -> Vec<Arc<dyn RtpReceiver>>;
-    /// Get the list of rtp transceiver
+
+    /// Returns this connection's RTP transceivers. Empty if the connection is gone.
     async fn get_transceivers(&self) -> Vec<Arc<dyn RtpTransceiver>>;
-    /// Add a Track to the PeerConnection
+
+    /// Adds a local track, re-using a compatible transceiver if one exists and creating one
+    /// otherwise. Triggers renegotiation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed.
+    ///
+    /// # Specification
+    ///
+    /// See [addTrack](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtrack)
     async fn add_track(&self, track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>>;
-    /// Remove a Track from the PeerConnection
+
+    /// Stops a sender from sending and marks its transceiver as no longer sending. Triggers
+    /// renegotiation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, or if the sender does not belong to it.
+    ///
+    /// # Specification
+    ///
+    /// See [removeTrack](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-removetrack)
     async fn remove_track(&self, sender: &Arc<dyn RtpSender>) -> Result<()>;
-    /// Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers
+
+    /// Creates a `SendRecv` or `SendOnly` transceiver around `track` and adds it to the set of
+    /// transceivers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, if `init` requests a direction that is not
+    /// valid for a track-backed transceiver, or if no codec matching the track is registered.
+    ///
+    /// # Specification
+    ///
+    /// See [addTransceiver](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtransceiver)
     async fn add_transceiver_from_track(
         &self,
         track: Arc<dyn TrackLocal>,
         init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<dyn RtpTransceiver>>;
-    /// Create a new RtpTransceiver and adds it to the set of transceivers
+
+    /// Creates a transceiver for the given media kind and adds it to the set of transceivers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is closed, if `init` requests an unsupported
+    /// direction, or if no codec is registered for `kind`.
+    ///
+    /// # Specification
+    ///
+    /// See [addTransceiver](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-addtransceiver)
     async fn add_transceiver_from_kind(
         &self,
         kind: RtpCodecKind,
         init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<dyn RtpTransceiver>>;
-    /// Get a snapshot of accumulated statistics.
+
+    /// Returns a snapshot of accumulated statistics.
+    ///
+    /// `now` is supplied by the caller rather than read from the clock, so that a stats
+    /// snapshot is as reproducible as the rest of the session. `selector` narrows the report to
+    /// a single sender or receiver and everything it references.
+    ///
+    /// # Specification
+    ///
+    /// See [getStats](https://www.w3.org/TR/webrtc/#widl-RTCPeerConnection-getStats-Promise-RTCStatsReport--MediaStreamTrack-selector)
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport;
     /// The SCTP transport carrying this connection's data channels.
     ///
@@ -519,7 +706,7 @@ pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
     /// pc.sctp().await.expect("SCTP negotiated").transport().ice_transport()
     /// ```
     ///
-    /// ## Specifications
+    /// # Specification
     ///
     /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-sctp)
     async fn sctp(&self) -> Option<Arc<dyn SctpTransport>>;

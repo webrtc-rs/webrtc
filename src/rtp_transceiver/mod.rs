@@ -63,6 +63,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 /// An RTP Receiver that receives media from a remote peer.
+///
+/// Every `async` method here is a round-trip to the background driver that owns the connection
+/// state, so all of them are fallible: they return an error once this receiver or its peer
+/// connection is gone. That is the only failure mode unless a method documents another, and it
+/// is not repeated on each one. [`id`](RtpReceiver::id) and [`track`](RtpReceiver::track) are
+/// infallible, because the handle caches them.
 #[async_trait::async_trait]
 pub trait RtpReceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the RTP receiver.
@@ -86,13 +92,23 @@ pub trait RtpReceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// applying a local or remote description. Under bundling every sender and receiver shares
     /// one transport, so all of them compare equal by `id()`.
     ///
-    /// ## Specifications
+    /// `Err` means something different from `Ok(None)`: the receiver itself no longer exists.
+    /// Note this is *not* keyed on the DTLS handshake having started — see
+    /// [`docs/transport-objects.md`](https://github.com/webrtc-rs/webrtc/blob/master/docs/transport-objects.md).
+    ///
+    /// # Specification
     ///
     /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-transport)
     async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>>;
 }
 
 /// An RTP Sender that sends media to a remote peer.
+///
+/// Every `async` method here is a round-trip to the background driver that owns the connection
+/// state, so all of them are fallible: they return an error once this sender or its peer
+/// connection is gone. That is the only failure mode unless a method documents another, and it
+/// is not repeated on each one. [`id`](RtpSender::id) and [`track`](RtpSender::track) are
+/// infallible, because the handle caches them.
 #[async_trait::async_trait]
 pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the RTP sender.
@@ -102,6 +118,11 @@ pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the capabilities of the sender for the given codec kind.
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>>;
     /// Sets the parameters for this sender.
+    ///
+    /// # Errors
+    ///
+    /// Also returns an error if `parameters` does not match the encodings the transceiver was
+    /// created with — the W3C algorithm rejects changes to the number or order of encodings.
     async fn set_parameters(
         &self,
         parameters: RTCRtpSendParameters,
@@ -110,6 +131,13 @@ pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the current parameters configured for this sender.
     async fn get_parameters(&self) -> Result<RTCRtpSendParameters>;
     /// Replaces the track currently being sent by this sender.
+    ///
+    /// Does not trigger renegotiation when the new track is compatible with the negotiated
+    /// codec.
+    ///
+    /// # Errors
+    ///
+    /// Also returns an error if the new track's kind differs from the current one.
     async fn replace_track(&self, track: Arc<dyn TrackLocal>) -> Result<()>;
     /// Sets the media streams associated with this sender's track.
     async fn set_streams(&self, streams: Vec<MediaStreamId>) -> Result<()>;
@@ -126,13 +154,19 @@ pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// Note this is *not* keyed on the DTLS handshake having started — see
     /// [`docs/transport-objects.md`](https://github.com/webrtc-rs/webrtc/blob/master/docs/transport-objects.md).
     ///
-    /// ## Specifications
+    /// # Specification
     ///
     /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-transport)
     async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>>;
 }
 
 /// An RTP Transceiver that represents a combination of an RTP Sender and Receiver.
+///
+/// Every `async` method here is a round-trip to the background driver that owns the connection
+/// state, so all of them are fallible: they return an error once this transceiver or its peer
+/// connection is gone. That is the only failure mode unless a method documents another, and it
+/// is not repeated on each one. [`id`](RtpTransceiver::id) is infallible, because the handle
+/// caches it.
 #[async_trait::async_trait]
 pub trait RtpTransceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the transceiver.
@@ -146,12 +180,27 @@ pub trait RtpTransceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the preferred direction configured for this transceiver.
     async fn direction(&self) -> Result<RTCRtpTransceiverDirection>;
     /// Sets the preferred direction for this transceiver.
+    ///
+    /// Takes effect at the next negotiation; read the negotiated value back with
+    /// [`current_direction`](RtpTransceiver::current_direction).
+    ///
+    /// # Errors
+    ///
+    /// Also returns an error if the transceiver has been stopped.
     async fn set_direction(&self, direction: RTCRtpTransceiverDirection) -> Result<()>;
     /// Returns the current direction negotiated for this transceiver.
     async fn current_direction(&self) -> Result<RTCRtpTransceiverDirection>;
     /// Permanently stops the transceiver.
+    ///
+    /// Irreversible: the transceiver sends and receives no further media. Triggers
+    /// renegotiation.
     async fn stop(&self) -> Result<()>;
     /// Sets the preferred codecs for this transceiver.
+    ///
+    /// # Errors
+    ///
+    /// Also returns an error if any codec is not registered in the media engine, or does not
+    /// match the transceiver's kind.
     async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()>;
 }
 

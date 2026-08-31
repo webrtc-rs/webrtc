@@ -61,19 +61,35 @@ pub use rtc::data_channel::{
 /// This allows `on_data_channel` in `PeerConnectionEventHandler` to receive a
 /// `Arc<dyn DataChannel>` without the event handler trait itself needing to
 /// be generic over the interceptor type `I`.
+///
+/// # Why the accessors return `Result`
+///
+/// Unlike the browser API — and unlike the Sans-I/O core, where these are plain field reads —
+/// every `async` method here is a round-trip to the background driver that owns the connection
+/// state. So even a read as simple as [`label`](Self::label) is fallible: it returns
+/// [`Error::ErrDataChannelClosed`] once the channel or its peer connection is gone. That is the
+/// only way these accessors fail, and it is not repeated on each one below.
+///
+/// [`id`](Self::id) is the exception: it is a plain, infallible read, because the handle caches
+/// it. See the module docs for which methods are `async` and why.
 #[async_trait::async_trait]
 pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the label of this data channel.
+    ///
+    /// Labels are not required to be unique across channels.
     async fn label(&self) -> Result<String>;
     /// Returns whether this data channel guarantees in-order delivery.
     async fn ordered(&self) -> Result<bool>;
-    /// Returns the maximum packet lifetime in milliseconds, if configured.
+    /// Returns the maximum packet lifetime in milliseconds, or `None` if the channel is
+    /// reliable.
     async fn max_packet_life_time(&self) -> Result<Option<u16>>;
-    /// Returns the maximum number of retransmissions, if configured.
+    /// Returns the maximum number of retransmissions, or `None` if the channel is reliable.
     async fn max_retransmits(&self) -> Result<Option<u16>>;
-    /// Returns the subprotocol name configured for this data channel.
+    /// Returns the subprotocol name configured for this data channel, or the empty string if
+    /// none was negotiated.
     async fn protocol(&self) -> Result<String>;
-    /// Returns whether this data channel was negotiated by the application.
+    /// Returns whether this data channel was negotiated out-of-band by the application
+    /// (`true`), or established in-band over DCEP (`false`).
     async fn negotiated(&self) -> Result<bool>;
     /// Returns the identifier for this data channel.
     ///
@@ -130,7 +146,7 @@ pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
     ///
     /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]: crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit
     ///
-    /// # Example
+    /// # Examples
     ///
     /// ```no_run
     /// # use bytes::BytesMut;
@@ -150,7 +166,7 @@ pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
     /// returns [`Error::ErrDataChannelClosed`] on a closing/closed channel. Use
     /// [`try_send_text`](Self::try_send_text) for the non-blocking variant.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// ```no_run
     /// # use webrtc::error::Result;
@@ -198,8 +214,17 @@ pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
         self.send_text(text).await
     }
     /// Polls for the next event on this data channel.
+    ///
+    /// Resolves when the next [`DataChannelEvent`] is available, and returns `None` once the
+    /// channel is closed and no events remain — so a `while let Some(event) = dc.poll().await`
+    /// loop terminates on its own.
     async fn poll(&self) -> Option<DataChannelEvent>;
     /// Closes the data channel.
+    ///
+    /// Moves the channel to `Closing` and starts the DCEP/SCTP teardown; closing an
+    /// already-closed channel succeeds. Senders blocked in [`send`](Self::send) or
+    /// [`writable`](Self::writable) awaiting capacity are woken with
+    /// [`Error::ErrDataChannelClosed`].
     async fn close(&self) -> Result<()>;
 }
 
@@ -313,9 +338,7 @@ impl crate::sealed::Sealed for DataChannelImpl {}
 
 #[async_trait::async_trait]
 impl DataChannel for DataChannelImpl {
-    /// label represents a label that can be used to distinguish this
-    /// DataChannel object from other DataChannel objects. Scripts are
-    /// allowed to create multiple DataChannel objects with the same label.
+    // Documented on `DataChannel::label`.
     async fn label(&self) -> Result<String> {
         let mut peer_connection = self.inner.core.lock().await;
 
@@ -326,8 +349,7 @@ impl DataChannel for DataChannelImpl {
             .to_owned())
     }
 
-    /// Ordered returns true if the DataChannel is ordered, and false if
-    /// out-of-order delivery is allowed.
+    // Documented on `DataChannel::ordered`.
     async fn ordered(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -336,8 +358,7 @@ impl DataChannel for DataChannelImpl {
             .ordered())
     }
 
-    /// max_packet_lifetime represents the length of the time window (msec) during
-    /// which transmissions and retransmissions may occur in unreliable mode.
+    // Documented on `DataChannel::max_packet_life_time`.
     async fn max_packet_life_time(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -346,8 +367,7 @@ impl DataChannel for DataChannelImpl {
             .max_packet_life_time())
     }
 
-    /// max_retransmits represents the maximum number of retransmissions that are
-    /// attempted in unreliable mode.
+    // Documented on `DataChannel::max_retransmits`.
     async fn max_retransmits(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -356,8 +376,7 @@ impl DataChannel for DataChannelImpl {
             .max_retransmits())
     }
 
-    /// protocol represents the name of the sub-protocol used with this
-    /// DataChannel.
+    // Documented on `DataChannel::protocol`.
     async fn protocol(&self) -> Result<String> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -367,8 +386,7 @@ impl DataChannel for DataChannelImpl {
             .to_owned())
     }
 
-    /// negotiated represents whether this DataChannel was negotiated by the
-    /// application (true), or not (false).
+    // Documented on `DataChannel::negotiated`.
     async fn negotiated(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -382,7 +400,7 @@ impl DataChannel for DataChannelImpl {
         self.id
     }
 
-    /// ready_state represents the state of the DataChannel object.
+    // Documented on `DataChannel::ready_state`.
     async fn ready_state(&self) -> Result<RTCDataChannelState> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -400,8 +418,7 @@ impl DataChannel for DataChannelImpl {
             .buffered_amount_high_threshold())
     }
 
-    /// set_buffered_amount_high_threshold sets the threshold at which the
-    /// bufferedAmount is considered to be high.
+    // Documented on `DataChannel::set_buffered_amount_high_threshold`.
     async fn set_buffered_amount_high_threshold(&self, threshold: u32) -> Result<()> {
         {
             let mut peer_connection = self.inner.core.lock().await;
@@ -432,8 +449,7 @@ impl DataChannel for DataChannelImpl {
             .outstanding_bytes())
     }
 
-    /// set_buffered_amount_low_threshold sets the threshold at which the
-    /// bufferedAmount is considered to be low.
+    // Documented on `DataChannel::set_buffered_amount_low_threshold`.
     async fn set_buffered_amount_low_threshold(&self, threshold: u32) -> Result<()> {
         {
             let mut peer_connection = self.inner.core.lock().await;

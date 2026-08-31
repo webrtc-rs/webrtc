@@ -101,9 +101,20 @@ pub trait TrackLocal: Track {
     async fn unbind(&self);
 
     /// Writes an RTP packet to the track.
+    ///
+    /// The packet passes through the interceptor chain before going out on the wire.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track is not bound — writing before negotiation completes, or
+    /// after the peer connection has closed.
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()>;
 
     /// Writes RTCP packets to the track.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track is not bound; see [`write_rtp`](Self::write_rtp).
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()>;
 
     /// Polls for the next event on the local track (RTCP feedback from the remote peer).

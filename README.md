@@ -53,14 +53,21 @@ alt="Recall.ai">
 <a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
 </p>
 
-<!--details>
+<details>
 <summary><b>Table of Content</b></summary>
 
 - [Overview](#overview)
+- [Getting Started](#getting-started)
+- [The architecture](#the-architecture)
+- [Release lines](#release-lines)
+- [What's in 0.21](#whats-in-021)
+- [How to Provide Feedback](#how-to-provide-feedback)
+- [Building and Testing](#building-and-testing)
+- [Semantic Versioning](#semantic-versioning)
 - [Open Source License](#open-source-license)
 - [Contributing](#contributing)
 
-</details-->
+</details>
 
 ## Overview
 
@@ -85,12 +92,11 @@ details and roadmap.
 
 ## Getting Started
 
-**Trying the `0.21` pre-release?** Cargo does not select pre-release versions from a plain
-`"0.21"` requirement, so name it in full:
+Add the crate:
 
 ```toml
 [dependencies]
-webrtc = "0.21.0-alpha.1"
+webrtc = "0.21.0"
 ```
 
 **Feature flags:**
@@ -118,12 +124,14 @@ the [custom-runtime example](examples/custom-runtime), which runs the full stack
 **Choosing a crypto provider.** Same story: pass one per connection through `SettingEngine`, which also means two
 connections in one process can use different providers.
 
-```rust
+```rust,ignore
 use std::sync::Arc;
-use webrtc::peer_connection::crypto;
 use webrtc::peer_connection::SettingEngineBuilder;
+use webrtc::peer_connection::crypto;
 
-let setting_engine = SettingEngineBuilder::new().with_crypto_provider(Arc::new(crypto::providers::AwsLcRsProvider::new()));
+let setting_engine = SettingEngineBuilder::new()
+    .with_crypto_provider(Arc::new(crypto::providers::AwsLcRsProvider::new()))
+    .build();
 ```
 
 Applications needing a FIPS-validated module, an HSM, or a platform backend implement
@@ -168,7 +176,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //    different providers. Enable `crypto-aws-lc-rs` for `AwsLcRsProvider`, or build with
     //    neither feature and pass your own `RTCCryptoProvider`.
     let setting_engine = SettingEngineBuilder::default()
-        .with_crypto_provider(Arc::new(crypto::providers::RingProvider::new()));
+        .with_crypto_provider(Arc::new(crypto::providers::RingProvider::new()))
+        .build();
 
     // 4. Build the PeerConnection — the background driver starts here.
     //    The runtime is a value, injected per connection: swap `TokioRuntime` for
@@ -201,7 +210,7 @@ let pc: Arc<dyn PeerConnection> = Arc::new(pc);
 Either way no runtime or interceptor type parameters leak into your own types.
 
 **Next steps:** browse the [API docs](https://docs.rs/webrtc) or the
-[37 runnable examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) — data channels, media playback,
+[39 runnable examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) — data channels, media playback,
 simulcast, ICE restart, insertable streams, and more.
 
 ### The architecture
@@ -231,9 +240,9 @@ simulcast, ICE restart, insertable streams, and more.
 
 ### Release lines
 
-- **`v0.21.x`** — in development, currently `v0.21.0-alpha.1`. The pre-1.0 line, working towards a stable public
-  API; see [what's in 0.21](#whats-in-021) below. APIs may change between alphas.
-- **`v0.20.x`** — the current stable line, and the recommended choice for production today.
+- **`v0.21.x`** — currently `v0.21.0`, and the recommended choice today. The pre-1.0 line, working towards a
+  stable public API; see [what's in 0.21](#whats-in-021) below.
+- **`v0.20.x`** — the previous line.
 
 While the version is `0.x`, a minor bump may carry breaking changes
 (see [Semantic Versioning](#semantic-versioning)). Once `1.0` ships, that stops being true — which is the whole
@@ -248,9 +257,20 @@ not break under you. Work so far:
 implements are sealed, so variants and methods can be added later without a major bump. This cannot be done
 *after* `1.0`, which is why it came first.
 
-✅ **Crypto provider selection** — `crypto-ring` (default) and `crypto-aws-lc-rs` features, chosen per peer
-connection, so two connections in one process can use different providers. Build with neither and supply your
-own. No cryptography happens in this crate; a CI check enforces that.
+✅ **A provider-neutral cryptographic API** — every cryptographic operation in the stack now goes through the
+new `rtc-crypto` crate rather than a hard-wired backend. `RTCCryptoProvider` bundles an operations trait and a
+CSPRNG; `crypto-ring` (default) and `crypto-aws-lc-rs` ship built in and are **additive** (enabling both builds,
+and `ring` stays the default selection). The provider is chosen **per peer connection** — there is no
+process-global provider to install — so two connections in one process can use different ones. Build with
+neither feature and supply your own for OpenSSL, a FIPS-validated module, an HSM or a platform backend;
+`rtc-crypto`'s conformance suite validates it against the same RFC vectors the built-ins pass. No cryptography
+happens in this crate; a CI check enforces that.
+
+✅ **Faster per-packet crypto** — key schedules moved off the per-packet path. SRTP keys its MACs once per
+context (~40% faster per RTCP packet), DTLS CBC keys its record MACs at epoch setup (~4-7% faster), AES-CTR is
+batched (~9-10% faster on a 1200-byte payload), and the built-in CSPRNG no longer reads the OS per record —
+DTLS GCM record encryption went from 1.015 µs to 262 ns. Every per-packet benchmark is at parity with or
+faster than the pre-migration baseline.
 
 ✅ **Deterministic time** — the Sans-I/O core no longer reads a clock. Time is an input, threaded from
 `Runtime::now()`, so `runtime-mock`'s virtual clock genuinely drives ICE timeouts, DTLS retransmits and SCTP
@@ -259,6 +279,16 @@ RTO. Advancing a mock clock by 30 s now produces real protocol transitions inste
 ✅ **No silent drops on data channels** — a slow consumer used to lose messages on a *reliable* channel once
 the internal hand-off queue filled. The driver now keeps them and stops pulling from the core, so back-pressure
 reaches SCTP's receive window and the peer is throttled instead. Media is unaffected by a stalled data channel.
+
+✅ **Faster and more correct SCTP setup** — the initial T1-init/T1-cookie RTO is now the 1 s that RFC 9260 §16
+recommends, rather than the 3 s inherited from RFC 4960, so a lost first handshake packet is retried a second
+in rather than three. And an inbound `DATA_CHANNEL_OPEN` that arrives before the local association reaches
+`Established` is now held until it does, instead of announcing a channel as open over a transport that would
+reject the first thing written to it.
+
+⚠️ **One behaviour change to note** — `MediaEngine::register_default_codecs` no longer registers
+`video/ulpfec`, because the receive path does not recover media from ULPFEC packets. This changes the default
+offer's SDP: payload type 116 is gone. Register it explicitly with `MIME_TYPE_ULP_FEC` if you need it.
 
 Track the remaining work in [The path to webrtc 1.0](https://github.com/webrtc-rs/webrtc/issues/836).
 
@@ -270,8 +300,7 @@ We welcome your input as `v0.20.x` and `v0.21.x` grow:
 - Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
 - Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
 
-**New projects:** start on `v0.20`, or on `v0.21.0-alpha.1` if you want the pre-1.0 API and can absorb changes
-between alphas.  
+**New projects:** start on `v0.21.0`.  
 **Hit a gap?** Open an issue — reports of what is missing directly shape what we prioritise before `1.0`.
 
 ## Building and Testing
