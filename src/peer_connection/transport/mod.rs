@@ -194,7 +194,7 @@ use std::sync::Arc;
 ///
 /// Obtained from [`PeerConnection::sctp`](crate::peer_connection::PeerConnection::sctp).
 ///
-/// ## Specifications
+/// # Specification
 ///
 /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcsctptransport)
 #[async_trait::async_trait]
@@ -228,7 +228,7 @@ pub trait SctpTransport: crate::sealed::Sealed + Send + Sync + 'static {
 ///
 /// Obtained from [`SctpTransport::transport`], or from a sender's or receiver's `transport()`.
 ///
-/// ## Specifications
+/// # Specification
 ///
 /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcdtlstransport)
 #[async_trait::async_trait]
@@ -255,7 +255,7 @@ pub trait DtlsTransport: crate::sealed::Sealed + Send + Sync + 'static {
 ///
 /// Obtained from [`DtlsTransport::ice_transport`].
 ///
-/// ## Specifications
+/// # Specification
 ///
 /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcicetransport)
 #[async_trait::async_trait]
