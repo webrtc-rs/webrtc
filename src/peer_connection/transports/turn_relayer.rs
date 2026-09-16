@@ -64,6 +64,9 @@ pub(crate) struct RTCTurnRelayer {
     pending_permissions: HashMap<rtc::stun::message::TransactionId, PendingPermission>,
     pending_permission_pairs: HashMap<(SocketAddr, SocketAddr), rtc::stun::message::TransactionId>,
     pending_packets: HashMap<(SocketAddr, SocketAddr), VecDeque<TaggedBytesMut>>,
+    /// Refresh(0) packets generated while a TURN client is being retired.
+    /// These must survive configuration resets and be sent on the old socket.
+    retirement_wouts: VecDeque<TaggedBytesMut>,
     wouts: VecDeque<TaggedBytesMut>,
     routs: VecDeque<TaggedBytesMut>,
     events: VecDeque<RTCTurnRelayEventOut>,
@@ -87,6 +90,7 @@ impl RTCTurnRelayer {
             pending_permissions: HashMap::new(),
             pending_permission_pairs: HashMap::new(),
             pending_packets: HashMap::new(),
+            retirement_wouts: VecDeque::new(),
             wouts: VecDeque::new(),
             routs: VecDeque::new(),
             events: VecDeque::new(),
@@ -122,7 +126,7 @@ impl RTCTurnRelayer {
 
         let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
         for key in keys {
-            self.remove_client(key);
+            self.remove_client(key, true);
         }
         self.relay_addrs.clear();
         self.pending_permissions.clear();
@@ -494,8 +498,22 @@ impl RTCTurnRelayer {
         }
     }
 
-    fn remove_client(&mut self, four_tuple: FourTuple) {
+    fn remove_client(&mut self, four_tuple: FourTuple, release_allocation: bool) {
         if let Some(mut managed_client) = self.clients.remove(&four_tuple) {
+            // Client::close() only clears transaction state. A live TURN
+            // allocation is released by Relay::close(), which queues an
+            // authenticated Refresh(LIFETIME=0). Clear old transactions first,
+            // then create and drain the release request before dropping the
+            // client. The driver sends these packets on the old socket.
+            let _ = managed_client.client.close();
+            if release_allocation && let Some(relay_addr) = managed_client.relay_addr {
+                if let Ok(mut relay) = managed_client.client.relay(relay_addr) {
+                    let _ = relay.close();
+                }
+                while let Some(msg) = managed_client.client.poll_write() {
+                    self.retirement_wouts.push_back(msg);
+                }
+            }
             if let Some(relay_addr) = managed_client.relay_addr.take() {
                 self.relay_addrs.remove(&relay_addr);
                 self.pending_packets
@@ -505,7 +523,6 @@ impl RTCTurnRelayer {
                 self.pending_permission_pairs
                     .retain(|(addr, _), _| *addr != relay_addr);
             }
-            let _ = managed_client.client.close();
         }
     }
 
@@ -632,6 +649,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     }
 
     fn poll_write(&mut self) -> Option<Self::Wout> {
+        if let Some(msg) = self.retirement_wouts.pop_front() {
+            return Some(msg);
+        }
         for managed_client in self.clients.values_mut() {
             while let Some(msg) = managed_client.client.poll_write() {
                 self.wouts.push_back(msg);
@@ -643,7 +663,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     fn handle_event(&mut self, evt: RTCTurnRelayEventIn) -> Result<()> {
         match evt {
             RTCTurnRelayEventIn::SocketWriteFailure(four_tuple) => {
-                self.remove_client(four_tuple);
+                // The socket is already unusable, so a Refresh(0) cannot be
+                // delivered. The server will reclaim this allocation by TTL.
+                self.remove_client(four_tuple, false);
                 self.maybe_emit_gathering_complete();
             }
         }
@@ -779,7 +801,7 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     fn close(&mut self) -> Result<()> {
         let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
         for key in keys {
-            self.remove_client(key);
+            self.remove_client(key, true);
         }
         Ok(())
     }
