@@ -304,15 +304,19 @@ impl Request {
         let mut reservation_token = "".to_owned();
         let mut use_ipv4 = true;
 
-        // 2. The server checks if the 5-tuple is currently in use by an
-        //    existing allocation.  If yes, the server rejects the request with
-        //    a 437 (Allocation Mismatch) error.
-        if self
-            .allocation_manager
-            .get_allocation(&five_tuple)
-            .await
-            .is_some()
-        {
+        // RFC 8656 section 7.2: replay a successful Allocate transaction on
+        // UDP, without creating or refreshing its allocation. A new transaction
+        // on an occupied tuple is still an Allocation Mismatch. Authentication
+        // above must succeed before the cached response may be returned.
+        if let Some(allocation) = self.allocation_manager.get_allocation(&five_tuple).await {
+            let response = allocation.allocate_response.lock().await.clone();
+            if let Some(response) = response {
+                if response.transaction_id == m.transaction_id
+                    && allocation.username() == username.text
+                {
+                    return build_and_send(&self.conn, self.src_addr, response).await;
+                }
+            }
             let msg = build_msg(
                 m.transaction_id,
                 MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
@@ -611,6 +615,8 @@ impl Request {
             )?
         };
 
+        // Cache before sending: a failed/lost send must still be replayable.
+        *a.allocate_response.lock().await = Some(msg.clone());
         build_and_send(&self.conn, self.src_addr, msg).await
     }
 
