@@ -80,6 +80,9 @@ pub struct Allocation {
     pub(crate) relay_socket: Arc<dyn Conn + Send + Sync>,
     five_tuple: FiveTuple,
     username: Username,
+    // Cache the authenticated Allocate success for UDP retransmissions. Keeping it
+    // with the allocation bounds its lifetime and preserves every response attribute.
+    pub(crate) allocate_response: Mutex<Option<Message>>,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
     allocations: Weak<Mutex<AllocationMap>>,
@@ -96,6 +99,10 @@ fn addr2ipfingerprint(addr: &SocketAddr) -> String {
 }
 
 impl Allocation {
+    pub(crate) fn username(&self) -> &str {
+        &self.username.text
+    }
+
     /// Creates a new [`Allocation`].
     pub fn new(
         turn_socket: Arc<dyn Conn + Send + Sync>,
@@ -113,6 +120,7 @@ impl Allocation {
             relay_socket,
             five_tuple,
             username,
+            allocate_response: Mutex::new(None),
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
             allocations: allocation_map,
