@@ -86,7 +86,7 @@ impl PeerConnectionInternal {
         let ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&ice_gatherer)));
 
         // Create the DTLS transport
-        let certificates = configuration.certificates.drain(..).collect();
+        let certificates = std::mem::take(&mut configuration.certificates);
         let dtls_transport =
             Arc::new(api.new_dtls_transport(Arc::clone(&ice_transport), certificates)?);
 

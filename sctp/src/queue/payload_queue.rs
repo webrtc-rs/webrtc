@@ -98,7 +98,7 @@ impl PayloadQueue {
 
     /// popDuplicates returns an array of TSN values that were found duplicate.
     pub(crate) fn pop_duplicates(&mut self) -> Vec<u32> {
-        self.dup_tsn.drain(..).collect()
+        std::mem::take(&mut self.dup_tsn)
     }
 
     pub(crate) fn get_gap_ack_blocks(&self, cumulative_tsn: u32) -> Vec<GapAckBlock> {

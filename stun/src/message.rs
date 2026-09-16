@@ -244,7 +244,7 @@ impl Message {
 
     // WriteAttributes encodes all m.Attributes to m.
     pub fn write_attributes(&mut self) {
-        let attributes: Vec<RawAttribute> = self.attributes.0.drain(..).collect();
+        let attributes: Vec<RawAttribute> = std::mem::take(&mut self.attributes.0);
         for a in &attributes {
             self.add(a.typ, &a.value);
         }

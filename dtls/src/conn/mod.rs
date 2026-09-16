@@ -857,7 +857,7 @@ impl DTLSConn {
                             done = handle_queue_rx.recv() => {
                                 //trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
 
-                                let pkts = ctx.encrypted_packets.drain(..).collect();
+                                let pkts = std::mem::take(&mut ctx.encrypted_packets);
                                 DTLSConn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts).await?;
 
                                 drop(done);
