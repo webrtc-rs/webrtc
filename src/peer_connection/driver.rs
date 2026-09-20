@@ -329,9 +329,12 @@ where
 
         // Retire TURN allocations while the old UDP sockets are still alive.
         // Rebinding drops those sockets below; sending Refresh(0) afterwards
-        // would leave the server allocation until expiry.
-        self.turn_relayer.close()?;
-        self.poll_writes().await?;
+        // would leave the server allocation until expiry. The initial bind has
+        // no old socket/client generation to retire.
+        if !self.udp_sockets.is_empty() {
+            self.turn_relayer.close()?;
+            self.poll_writes().await?;
+        }
 
         // Drop before binding — see above. Also drops every accepted TCP stream, which is
         // correct: they belong to the generation being replaced.
