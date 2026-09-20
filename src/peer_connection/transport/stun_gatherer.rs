@@ -6,6 +6,7 @@
 
 use crate::runtime::Runtime;
 use rtc::ice::candidate::CandidateConfig;
+use rtc::ice::url::{SchemeType, Url as IceUrl};
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::{
     CandidateHostConfig, CandidateServerReflexiveConfig, RTCIceCandidate, RTCIceCandidateInit,
@@ -22,7 +23,7 @@ use std::sync::Arc;
 /*use rtc::turn::client::{
     Client as TurnClient, ClientConfig as TurnClientConfig, Event as TurnEvent,
 };*/
-use log::{debug, error};
+use log::{debug, error, warn};
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::stun::agent::StunEvent;
 use rtc::stun::message::Getter;
@@ -160,16 +161,50 @@ impl RTCStunGatherer {
         // Clone the handle up front so the per-server borrows below stay disjoint.
         let runtime = Arc::clone(&self.runtime);
         for ice_server in &self.ice_servers {
-            for url in &ice_server.urls {
-                // Only handle stun: URLs for now
-                if !url.starts_with("stun:") {
-                    continue;
+            for raw_url in &ice_server.urls {
+                // RFC 7064 defines no query component for `stun:`, but real-world
+                // configurations ship `?transport=udp` on STUN URLs. Strip it rather than
+                // reject the server, matching `RTCConfiguration::get_ice_servers` — which
+                // exists for exactly this reason, and which the driver bypasses by handing
+                // this gatherer the unsanitized list.
+                let sanitized = raw_url.split('?').next().unwrap_or(raw_url);
+
+                let url = match IceUrl::parse_url(sanitized) {
+                    Ok(url) => url,
+                    Err(err) => {
+                        // `turn:`/`turns:` belong to the TURN relayer; stay quiet about
+                        // anything that does not claim to be STUN.
+                        if sanitized.starts_with("stun") {
+                            warn!("Skipping malformed STUN url {}: {}", raw_url, err);
+                        }
+                        continue;
+                    }
+                };
+
+                match url.scheme {
+                    SchemeType::Stun => {}
+                    SchemeType::Stuns => {
+                        warn!("Skipping unsupported secure STUN url {}", raw_url);
+                        continue;
+                    }
+                    // Gathered by the TURN relayer, not here.
+                    _ => continue,
                 }
 
+                // `Url` supplies RFC 7064's default port, so a `stun:host` URL with the
+                // port omitted resolves instead of reaching `resolve_host` without one.
+                // `parse_url` strips the brackets from an IPv6 literal, so put them back:
+                // a bare `2001:db8::2:3478` is not a parseable socket address. A host
+                // containing `:` can only be an IPv6 literal — DNS names never do.
+                let server_addr = if url.host.contains(':') {
+                    format!("[{}]:{}", url.host, url.port)
+                } else {
+                    format!("{}:{}", url.host, url.port)
+                };
+
                 // Resolve once per URL, then only create clients for matching families.
-                let server_addr = url.strip_prefix("stun:").unwrap_or(url);
                 debug!("Resolving STUN server: {}", server_addr);
-                let resolved_addrs = match runtime.resolve_host(server_addr).await {
+                let resolved_addrs = match runtime.resolve_host(&server_addr).await {
                     Ok(addrs) => addrs,
                     Err(err) => {
                         error!("Failed to resolve STUN server {}: {}", server_addr, err);
@@ -521,7 +556,71 @@ mod tests {
         assert_eq!(gatherer.stun_clients.len(), 1);
         assert_eq!(
             gatherer.poll_write().unwrap().transport.peer_addr,
-            "192.0.2.2:3478".parse().unwrap()
+            "192.0.2.2:3478".parse::<SocketAddr>().unwrap()
         );
+    }
+
+    /// The URL forms real deployments ship, neither of which reached `resolve_host` in a
+    /// resolvable shape before: a port-less URL (RFC 7064 defaults it to 3478) and a
+    /// `?transport=udp` query that RFC 7064 does not define for `stun:` but that providers
+    /// send anyway — `RTCConfiguration::get_ice_servers` strips it, and the driver hands
+    /// this gatherer the unsanitized list. Both used to log "Failed to resolve STUN
+    /// server", the very spurious error this PR set out to remove.
+    #[test]
+    fn stun_urls_without_a_port_or_with_a_query_resolve() {
+        for url in [
+            "stun:192.0.2.2",
+            "stun:192.0.2.2:3478?transport=udp",
+            "stun:192.0.2.2?transport=udp",
+        ] {
+            let mut gatherer = RTCStunGatherer::new(
+                vec!["192.0.2.1:5000".parse::<SocketAddr>().unwrap()],
+                vec![RTCIceServer {
+                    urls: vec![url.to_owned()],
+                    ..Default::default()
+                }],
+                RTCIceTransportPolicy::All,
+                Arc::new(MockRuntime::new()),
+            );
+            futures::executor::block_on(gatherer.gather()).unwrap();
+            assert_eq!(1, gatherer.stun_clients.len(), "{url} should have resolved");
+        }
+    }
+
+    /// `Url::parse_url` strips the brackets from an IPv6 literal; they have to go back on
+    /// before the host and port are joined, or the result is an unparseable address.
+    #[test]
+    fn ipv6_stun_url_without_a_port_resolves() {
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["[2001:db8::1]:5000".parse::<SocketAddr>().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:[2001:db8::2]".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            Arc::new(MockRuntime::new()),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(1, gatherer.stun_clients.len());
+    }
+
+    /// A `turn:` URL in the same server list belongs to the TURN relayer and must not be
+    /// treated as a malformed STUN URL here.
+    #[test]
+    fn turn_urls_are_left_to_the_turn_relayer() {
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse::<SocketAddr>().unwrap()],
+            vec![RTCIceServer {
+                urls: vec![
+                    "turn:192.0.2.3:3478".to_owned(),
+                    "stun:192.0.2.2:3478".to_owned(),
+                ],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            Arc::new(MockRuntime::new()),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(1, gatherer.stun_clients.len());
     }
 }
