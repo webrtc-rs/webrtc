@@ -327,6 +327,15 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
+        // Retire TURN allocations while the old UDP sockets are still alive.
+        // Rebinding drops those sockets below; sending Refresh(0) afterwards
+        // would leave the server allocation until expiry. The initial bind has
+        // no old socket/client generation to retire.
+        if !self.udp_sockets.is_empty() {
+            self.turn_relayer.close()?;
+            self.poll_writes().await?;
+        }
+
         // Drop before binding — see above. Also drops every accepted TCP stream, which is
         // correct: they belong to the generation being replaced.
         self.udp_sockets.clear();
@@ -580,6 +589,7 @@ where
                 if let Err(err) = self.turn_relayer.close() {
                     error!("Failed to close turn_relayer: {}", err);
                 }
+                self.poll_writes().await?;
                 return Ok(());
             }
 
@@ -1395,6 +1405,9 @@ where
             PeerConnectionDriverEvent::Close => {
                 if let Err(err) = self.turn_relayer.close() {
                     error!("Failed to close turn_relayer: {}", err);
+                }
+                if let Err(err) = self.poll_writes().await {
+                    error!("Failed to flush TURN retirement packets: {}", err);
                 }
                 return true;
             }
