@@ -166,11 +166,24 @@ impl RTCStunGatherer {
                     continue;
                 }
 
+                // Resolve once per URL, then only create clients for matching families.
+                let server_addr = url.strip_prefix("stun:").unwrap_or(url);
+                debug!("Resolving STUN server: {}", server_addr);
+                let resolved_addrs = match runtime.resolve_host(server_addr).await {
+                    Ok(addrs) => addrs,
+                    Err(err) => {
+                        error!("Failed to resolve STUN server {}: {}", server_addr, err);
+                        continue;
+                    }
+                };
+
                 for local_addr in &self.local_addrs {
-                    match RTCStunGatherer::gather_from_stun_server(&*runtime, *local_addr, url)
-                        .await
-                    {
-                        Ok(stun_client) => {
+                    match RTCStunGatherer::gather_from_stun_server(
+                        &*runtime,
+                        *local_addr,
+                        &resolved_addrs,
+                    ) {
+                        Ok(Some(stun_client)) => {
                             self.stun_clients.insert(
                                 FourTuple {
                                     local_addr: stun_client.local_addr(),
@@ -179,6 +192,7 @@ impl RTCStunGatherer {
                                 stun_client,
                             );
                         }
+                        Ok(None) => {}
                         Err(err) => {
                             error!("Failed to gather stun client: {}", err);
                         }
@@ -190,48 +204,24 @@ impl RTCStunGatherer {
         Ok(())
     }
 
-    /// Gather a single srflx candidate from a STUN server
-    async fn gather_from_stun_server(
+    /// Gather a single srflx candidate, skipping servers without a matching address family.
+    fn gather_from_stun_server(
         runtime: &dyn Runtime,
         local_addr: SocketAddr,
-        stun_url: &str,
-    ) -> Result<StunClient, Error> {
-        // Resolve STUN server address (add default port 3478 if not specified)
-        let stun_server_addr_str = if stun_url.contains(':') {
-            stun_url
-                .strip_prefix("stun:")
-                .unwrap_or(stun_url)
-                .to_string()
-        } else {
-            format!(
-                "{}:3478",
-                stun_url.strip_prefix("stun:").unwrap_or(stun_url)
-            )
+        resolved_addrs: &[SocketAddr],
+    ) -> Result<Option<StunClient>, Error> {
+        let Some(stun_server_addr) = resolved_addrs
+            .iter()
+            .copied()
+            .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
+        else {
+            return Ok(None);
         };
 
-        debug!("Resolving STUN server: {}", stun_server_addr_str);
-
-        // Resolve hostname to IP address using runtime-agnostic helper
-        let resolved_addrs = runtime.resolve_host(&stun_server_addr_str).await?;
-
-        // Filter addresses to match the local_addr IP version (IPv4 or IPv6)
-        let stun_server_addr: SocketAddr = resolved_addrs
-            .into_iter()
-            .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
-            .ok_or_else(|| {
-                let ip_version = if local_addr.is_ipv4() { "IPv4" } else { "IPv6" };
-                Error::Other(format!(
-                    "Failed to resolve STUN server hostname to {} address (local_addr is {})",
-                    ip_version, local_addr
-                ))
-            })?;
-
         debug!(
-            "Resolved STUN server {} to {}",
-            stun_server_addr_str, stun_server_addr
+            "STUN server {} selected for {}",
+            stun_server_addr, local_addr
         );
-
-        debug!("STUN client bound to {}", local_addr);
 
         // Create STUN client using the sans-I/O pattern. The client is told the time; it
         // reads no clock of its own, so its transaction deadlines follow this runtime's.
@@ -250,7 +240,7 @@ impl RTCStunGatherer {
         // Send the request
         stun_client.handle_write(TaggedMessage { now, message: msg })?;
 
-        Ok(stun_client)
+        Ok(Some(stun_client))
     }
 }
 
@@ -399,5 +389,139 @@ impl Protocol<TaggedBytesMut, (), RTCStunGatherEventIn> for RTCStunGatherer {
             let _ = stun_client.close();
         }
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "runtime-mock"))]
+mod tests {
+    use super::*;
+    use crate::runtime::MockRuntime;
+
+    #[test]
+    fn stun_clients_require_a_matching_address_family() {
+        let runtime = MockRuntime::new();
+        let local_v4: SocketAddr = "192.0.2.1:5000".parse().unwrap();
+        let local_v6: SocketAddr = "[2001:db8::1]:5000".parse().unwrap();
+        let server_v4: SocketAddr = "192.0.2.2:3478".parse().unwrap();
+        let server_v6: SocketAddr = "[2001:db8::2]:3478".parse().unwrap();
+
+        for (local, servers, expected) in [
+            (local_v4, vec![server_v6], None),
+            (local_v6, vec![server_v4], None),
+            (local_v4, vec![], None),
+            (local_v6, vec![], None),
+            (local_v4, vec![server_v4], Some(server_v4)),
+            (local_v6, vec![server_v6], Some(server_v6)),
+            (local_v4, vec![server_v6, server_v4], Some(server_v4)),
+            (local_v6, vec![server_v4, server_v6], Some(server_v6)),
+        ] {
+            let client = RTCStunGatherer::gather_from_stun_server(&runtime, local, &servers)
+                .expect("an unavailable address family is not an error");
+            assert_eq!(client.as_ref().map(|client| client.peer_addr()), expected);
+            if let Some(mut client) = client {
+                assert_eq!(client.local_addr(), local);
+                let request = client.poll_write().expect("binding request queued");
+                assert_eq!(request.transport.local_addr, local);
+                assert_eq!(Some(request.transport.peer_addr), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn single_stack_stun_preserves_dual_stack_host_candidates() {
+        for url in ["stun:192.0.2.2:3478", "stun:[2001:db8::2]:3478"] {
+            let local_addrs = vec![
+                "192.0.2.1:5000".parse().unwrap(),
+                "[2001:db8::1]:5000".parse().unwrap(),
+            ];
+            let mut gatherer = RTCStunGatherer::new(
+                local_addrs,
+                vec![RTCIceServer {
+                    urls: vec![url.to_owned()],
+                    ..Default::default()
+                }],
+                RTCIceTransportPolicy::All,
+                Arc::new(MockRuntime::new()),
+            );
+            futures::executor::block_on(gatherer.gather()).unwrap();
+            assert_eq!(gatherer.stun_clients.len(), 1);
+            let candidates: Vec<_> = gatherer
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    RTCStunGatherEventOut::LocalIceCandidate(candidate) => {
+                        Some(&candidate.candidate)
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(candidates.len(), 2);
+            assert!(
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.contains("192.0.2.1"))
+            );
+            assert!(
+                candidates
+                    .iter()
+                    .any(|candidate| candidate.contains("2001:db8::1"))
+            );
+            let request = gatherer.poll_write().unwrap();
+            assert_eq!(
+                request.transport.local_addr.is_ipv4(),
+                request.transport.peer_addr.is_ipv4()
+            );
+            assert!(gatherer.poll_write().is_none());
+        }
+    }
+
+    #[test]
+    fn unmatched_server_completes_without_transactions() {
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["[2001:db8::1]:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:192.0.2.2:3478".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            Arc::new(MockRuntime::new()),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert!(gatherer.stun_clients.is_empty());
+        assert!(gatherer.poll_write().is_none());
+        assert!(gatherer.poll_timeout().is_none());
+        assert_eq!(gatherer.state(), RTCIceGatheringState::Complete);
+        assert!(matches!(
+            gatherer.poll_event(),
+            Some(RTCStunGatherEventOut::LocalIceCandidate(_))
+        ));
+        assert!(matches!(
+            gatherer.poll_event(),
+            Some(RTCStunGatherEventOut::StunGatheringComplete)
+        ));
+        assert!(gatherer.poll_event().is_none());
+    }
+
+    #[test]
+    fn resolution_failure_does_not_prevent_later_servers() {
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                // MockRuntime only resolves literals, so the first URL fails resolution.
+                urls: vec![
+                    "stun:unresolvable.invalid:3478".to_owned(),
+                    "stun:192.0.2.2:3478".to_owned(),
+                ],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            Arc::new(MockRuntime::new()),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(gatherer.stun_clients.len(), 1);
+        assert_eq!(
+            gatherer.poll_write().unwrap().transport.peer_addr,
+            "192.0.2.2:3478".parse().unwrap()
+        );
     }
 }
