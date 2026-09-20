@@ -186,6 +186,7 @@ fn stage_data_channel_event(
         return StageOutcome::Retained;
     };
 
+    // overflow: retained — `Full` hands the event back and it is kept, not dropped.
     match evt_tx.try_send(event) {
         Ok(()) => StageOutcome::Delivered,
         Err(TrySendError::Full(event)) => {
@@ -204,10 +205,7 @@ fn restage_retained_data_channel_events(
     channel_id: RTCDataChannelId,
     mut retained: VecDeque<DataChannelEvent>,
 ) {
-    pending
-        .entry(channel_id)
-        .or_default()
-        .append(&mut retained);
+    pending.entry(channel_id).or_default().append(&mut retained);
 }
 
 /// Send `buf` to `target` without allocating.
@@ -1209,8 +1207,7 @@ where
                             self.inner.handler.on_data_channel(data_channel).await;
                         }
 
-                        retained_before_open =
-                            self.pending_data_channel_events.remove(&channel_id);
+                        retained_before_open = self.pending_data_channel_events.remove(&channel_id);
                     }
                 }
 
@@ -2223,7 +2220,8 @@ mod tests {
         pending.insert(0, VecDeque::from([test_message(1)]));
 
         // A live sender does not matter: retained events must stay ahead.
-        let outcome = stage_data_channel_event(&senders, &mut pending, 0, DataChannelEvent::OnClose);
+        let outcome =
+            stage_data_channel_event(&senders, &mut pending, 0, DataChannelEvent::OnClose);
 
         assert_eq!(outcome, StageOutcome::Retained);
         let queued = pending.get(&0).unwrap();
@@ -2291,16 +2289,13 @@ mod tests {
         restage_retained_data_channel_events(&mut pending, channel_id, retained);
 
         // The consumer sees the open first.
-        assert!(matches!(
-            rx.try_recv(),
-            Ok(DataChannelEvent::OnOpen)
-        ));
+        assert!(matches!(rx.try_recv(), Ok(DataChannelEvent::OnOpen)));
 
         // A flush delivers the retained message after it.
         let mut queued = pending.remove(&channel_id).unwrap();
-        let evt_tx = senders.get(&channel_id).unwrap();
+        let tx = senders.get(&channel_id).unwrap();
         while let Some(event) = queued.pop_front() {
-            evt_tx.try_send(event).unwrap();
+            tx.try_send(event).unwrap();
         }
         match rx.try_recv() {
             Ok(DataChannelEvent::OnMessage(msg)) => {
