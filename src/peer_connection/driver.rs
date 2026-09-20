@@ -88,6 +88,16 @@ pub(crate) const APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY: usize = 256;
 /// of the channel permanently wrong. Overflow here is [webrtc#858](https://github.com/webrtc-rs/webrtc/issues/858).
 pub(crate) const DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
+/// How many events may stay retained for a channel that has no registered receiver.
+///
+/// Retention covers a registration that is still in flight, which is resolved by the very
+/// next `poll_events` — one `poll_reads` pass of events, far below this. The cap exists for
+/// the state that never resolves: an application that dropped its `DataChannel` without
+/// closing the stream, whose events would otherwise accumulate for the life of the
+/// connection. See [`Driver::flush_pending_data_channel_events`].
+const MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS: usize =
+    DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY;
+
 /// Capacity of each **driver → track-remote** event channel
 /// (OnOpen, OnEnding, OnEnded, OnError, OnRtpPacket, OnRtcpPacket).
 ///
@@ -158,14 +168,22 @@ enum StageOutcome {
 /// Two cases retain rather than deliver:
 ///
 /// - the consumer's queue is full (back-pressure), or
-/// - the channel has no registered sender *yet*: its `OnOpen` is still queued behind
-///   the event. TURN-relay ingest feeds the core and drains data-channel messages in
-///   the same `poll_reads` pass, while the `OnOpen` those messages' channel produced
-///   waits for the next `poll_events` — so a channel's first message can reach here
-///   before its registration does. A reliable ordered channel promises delivery, and
-///   SCTP has already acknowledged the bytes, so dropping here loses the message with
-///   no way for the peer to tell. The flush after registration delivers it; the
-///   `OnOpen` path lifts retained events out first so the open still precedes them.
+/// - the channel has no registered sender: either its `OnOpen` is still queued behind
+///   the event, or the application has dropped its `DataChannel`. TURN-relay ingest
+///   feeds the core and drains data-channel messages in the same `poll_reads` pass,
+///   while the `OnOpen` those messages' channel produced waits for the next
+///   `poll_events` — so a channel's first message can reach here before its
+///   registration does. A reliable ordered channel promises delivery, and SCTP has
+///   already acknowledged the bytes, so dropping here loses the message with no way for
+///   the peer to tell. The flush after registration delivers it; the `OnOpen` path
+///   lifts retained events out first so the open still precedes them.
+///
+///   Those two states are indistinguishable from here — `DataChannelImpl::drop`
+///   unregisters the sender without closing the SCTP stream, so a dropped channel looks
+///   exactly like one whose registration is still in flight. They are told apart by
+///   consequence rather than by prediction: see
+///   [`Driver::flush_pending_data_channel_events`], where an unregistered channel is
+///   bounded and never reports back-pressure.
 ///
 /// Anything already retained for the channel goes first, or a later event would
 /// overtake an earlier one — W3C queues `message` and `close` as tasks on the same
@@ -195,6 +213,52 @@ fn stage_data_channel_event(
         }
         Err(TrySendError::Disconnected(_)) => StageOutcome::NoLiveReceiver,
     }
+}
+
+/// Retry everything retained in `pending`, and report whether a *registered* consumer is
+/// still behind. See [`Driver::flush_pending_data_channel_events`] for why only a
+/// registered consumer may report back-pressure.
+fn flush_staged_data_channel_events(
+    senders: &HashMap<RTCDataChannelId, Sender<DataChannelEvent>>,
+    pending: &mut HashMap<RTCDataChannelId, VecDeque<DataChannelEvent>>,
+) -> bool {
+    let mut blocked = false;
+    for (channel_id, queued) in pending.iter_mut() {
+        let Some(evt_tx) = senders.get(channel_id) else {
+            // Registration in flight, or the channel is gone. Keep what fits: a
+            // registration that is coming lands on the very next `poll_events`, so the
+            // cap is only ever reached by a channel nobody will register again. Either
+            // way this channel does not hold the drain.
+            if queued.len() > MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS {
+                let dropped = queued.len() - MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS;
+                queued.truncate(MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS);
+                warn!(
+                    "data channel {}: dropped {} event(s) with no registered receiver",
+                    channel_id, dropped
+                );
+            }
+            continue;
+        };
+        while let Some(event) = queued.pop_front() {
+            // overflow: retained — on `Full` it goes back on the front and delivery
+            // stops for this channel, so order holds.
+            match evt_tx.try_send(event) {
+                Ok(()) => {}
+                Err(TrySendError::Full(event)) => {
+                    queued.push_front(event);
+                    break;
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    queued.clear();
+                    break;
+                }
+            }
+        }
+        blocked |= !queued.is_empty();
+    }
+
+    pending.retain(|_, queued| !queued.is_empty());
+    blocked
 }
 
 /// Re-queue `retained` behind anything already pending for `channel_id`. Used after an
@@ -1206,9 +1270,13 @@ where
                             ));
                             self.inner.handler.on_data_channel(data_channel).await;
                         }
-
-                        retained_before_open = self.pending_data_channel_events.remove(&channel_id);
                     }
+
+                    // Outside the `data_channel_exist` guard on purpose: if the core no
+                    // longer has the channel, nothing registers a sender, and leaving the
+                    // retained events in place would put this `OnOpen` behind them —
+                    // inverting the open-before-message order this lift exists to keep.
+                    retained_before_open = self.pending_data_channel_events.remove(&channel_id);
                 }
 
                 // overflow: retained — six lifecycle sends. They share the queue with
@@ -1711,7 +1779,19 @@ where
         }
     }
 
-    /// Retry retained events. Returns `true` while any remain undelivered.
+    /// Retry retained events. Returns `true` while a *registered* consumer is still
+    /// behind — that is the back-pressure signal `poll_reads` stops draining on.
+    ///
+    /// A channel with no registered sender never gates the drain. Its events are kept,
+    /// so the pre-registration case in [`stage_data_channel_event`] still delivers once
+    /// `OnOpen` registers the channel, but they are bounded and report no back-pressure.
+    /// The reason is that a sender is absent in two states that cannot be told apart
+    /// here: registration still in flight, and the application having dropped its
+    /// `DataChannel` (`DataChannelImpl::drop` unregisters it without closing the SCTP
+    /// stream). Reporting `true` for the second state would stop `poll_reads` from ever
+    /// calling `drain_core_data` again, stalling every data channel on the connection
+    /// and driving `a_rwnd` to zero — so an unregistered channel is bounded instead of
+    /// trusted, and only a registered-but-full consumer can hold the drain.
     async fn flush_pending_data_channel_events(&mut self) -> bool {
         if self.pending_data_channel_events.is_empty() {
             return false;
@@ -1720,37 +1800,9 @@ where
         let senders: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> =
             self.inner.data_channel_events_tx.lock().await.clone();
 
-        for (channel_id, pending) in self.pending_data_channel_events.iter_mut() {
-            let Some(evt_tx) = senders.get(channel_id) else {
-                // Not registered *yet*: the channel's `OnOpen` is still queued (the
-                // ingest that produced these events runs in the same pass as this
-                // drain, while `OnOpen` waits for the next `poll_events`). Keep the
-                // events; the flush after registration delivers them. Registration
-                // always follows — the core emits `OnOpen` for every channel it
-                // opens — so this cannot park the queue indefinitely.
-                continue;
-            };
-            while let Some(event) = pending.pop_front() {
-                // overflow: retained — on `Full` it goes back on the front and delivery
-                // stops for this channel, so order holds.
-                match evt_tx.try_send(event) {
-                    Ok(()) => {}
-                    Err(TrySendError::Full(event)) => {
-                        pending.push_front(event);
-                        break;
-                    }
-                    Err(TrySendError::Disconnected(_)) => {
-                        pending.clear();
-                        break;
-                    }
-                }
-            }
-        }
+        let blocked =
+            flush_staged_data_channel_events(&senders, &mut self.pending_data_channel_events);
 
-        self.pending_data_channel_events
-            .retain(|_, pending| !pending.is_empty());
-
-        let blocked = !self.pending_data_channel_events.is_empty();
         self.inner
             .data_channel_delivery_blocked
             .store(blocked, Ordering::Release);
@@ -2303,5 +2355,96 @@ mod tests {
             }
             other => panic!("expected the retained message after OnOpen, got {other:?}"),
         }
+    }
+
+    /// The regression this fix exists for: a channel whose sender was removed (the
+    /// application dropped its `DataChannel`; `DataChannelImpl::drop` unregisters it
+    /// without closing the SCTP stream) must not report back-pressure. Reporting it
+    /// would stop `poll_reads` from ever calling `drain_core_data` again, stalling
+    /// every data channel on the connection.
+    #[test]
+    fn unregistered_channel_never_reports_back_pressure() {
+        let mut pending = HashMap::new();
+        pending.insert(
+            0,
+            VecDeque::from(vec![test_message(1), DataChannelEvent::OnClose]),
+        );
+
+        let senders = HashMap::new();
+        assert!(!flush_staged_data_channel_events(&senders, &mut pending));
+
+        // Retained for a registration that may still be in flight ...
+        assert_eq!(2, pending.get(&0).map(|q| q.len()).unwrap_or(0));
+        // ... but repeated flushes keep reporting "not blocked", so the drain runs on.
+        assert!(!flush_staged_data_channel_events(&senders, &mut pending));
+    }
+
+    /// A registered consumer that is genuinely full still holds the drain — the
+    /// back-pressure behavior webrtc#858 added must survive this fix.
+    #[test]
+    fn registered_full_consumer_still_reports_back_pressure() {
+        let channel_id = 0;
+        let (tx, _rx) = channel::<DataChannelEvent>(1);
+        tx.try_send(test_message(1)).unwrap();
+
+        let mut senders = HashMap::new();
+        senders.insert(channel_id, tx);
+
+        let mut pending = HashMap::new();
+        pending.insert(channel_id, VecDeque::from(vec![test_message(2)]));
+
+        assert!(flush_staged_data_channel_events(&senders, &mut pending));
+        assert_eq!(1, pending.get(&channel_id).map(|q| q.len()).unwrap_or(0));
+    }
+
+    /// Events retained before registration are delivered once the sender appears, and
+    /// the flush then reports unblocked.
+    #[test]
+    fn retained_events_are_delivered_once_the_channel_registers() {
+        let channel_id = 0;
+        let mut pending = HashMap::new();
+        pending.insert(
+            channel_id,
+            VecDeque::from(vec![test_message(1), test_message(2)]),
+        );
+
+        // No sender yet: kept, and not blocking.
+        let mut senders = HashMap::new();
+        assert!(!flush_staged_data_channel_events(&senders, &mut pending));
+
+        // Registration lands; the next flush drains them in order.
+        let (tx, mut rx) =
+            channel::<DataChannelEvent>(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+        senders.insert(channel_id, tx);
+        assert!(!flush_staged_data_channel_events(&senders, &mut pending));
+        assert!(pending.is_empty());
+
+        for expected in [1u8, 2] {
+            match rx.try_recv() {
+                Ok(DataChannelEvent::OnMessage(msg)) => assert_eq!(&msg.data[..], &[expected]),
+                other => panic!("expected retained message {expected}, got {other:?}"),
+            }
+        }
+    }
+
+    /// Retention for a channel nobody will register again is bounded, so a dropped
+    /// handle cannot accumulate events for the life of the connection.
+    #[test]
+    fn unregistered_retention_is_bounded() {
+        let over = MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS + 10;
+        let mut pending = HashMap::new();
+        pending.insert(
+            0,
+            (0..over)
+                .map(|i| test_message(i as u8))
+                .collect::<VecDeque<_>>(),
+        );
+
+        let senders = HashMap::new();
+        assert!(!flush_staged_data_channel_events(&senders, &mut pending));
+        assert_eq!(
+            MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS,
+            pending.get(&0).map(|q| q.len()).unwrap_or(0)
+        );
     }
 }
