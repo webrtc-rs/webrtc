@@ -121,6 +121,16 @@ impl RTCTcpTransport {
         }
     }
 
+    /// Stop using a TURN connection the relayer no longer needs. Unlike a loss this is not
+    /// reported back — the relayer asked for it.
+    pub(crate) fn release_turn_stream(&mut self, four_tuple: &FourTuple) {
+        if self.is_turn_stream(four_tuple) {
+            self.streams.remove(four_tuple);
+            self.decoders.remove(four_tuple);
+            self.dead_turn_streams.insert(*four_tuple);
+        }
+    }
+
     /// TURN connections that have ended since the last call. The relayer drops the
     /// client that was using each one.
     pub(crate) fn take_closed_turn_streams(&mut self) -> Vec<FourTuple> {
@@ -575,6 +585,22 @@ mod tests {
             let res = transport.read_futures.next().await.unwrap();
             assert!(transport.on_read(Instant::now(), res).is_empty());
             assert_eq!(transport.take_closed_turn_streams(), vec![four_tuple]);
+        });
+    }
+
+    #[test]
+    fn a_released_turn_stream_is_not_reported_as_lost() {
+        block_on(async {
+            let (ours, four_tuple, _theirs) = connected_pair().await;
+            let mut transport = RTCTcpTransport::new(HashMap::new());
+            transport.register_turn_stream(four_tuple, ours);
+            // The relayer let go of it: closing it is not news to anyone.
+            transport.release_turn_stream(&four_tuple);
+            assert!(transport.take_closed_turn_streams().is_empty());
+            assert!(
+                transport.write(&outgoing(four_tuple, &STUN)).await.is_err(),
+                "nothing more goes out on it"
+            );
         });
     }
 
