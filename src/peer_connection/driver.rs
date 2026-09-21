@@ -1204,15 +1204,17 @@ where
                     )
                     .await
                     {
-                        Ok(Ok(stream)) => stream.local_addr().map(|local_addr| {
-                            let peer_addr = stream.peer_addr().unwrap_or(server);
-                            (
+                        // A connected stream that cannot name both of its ends has no
+                        // four-tuple to route by; it is a failed connect, not a guess.
+                        Ok(Ok(stream)) => stream.local_addr().and_then(|local_addr| {
+                            let peer_addr = stream.peer_addr()?;
+                            Ok((
                                 FourTuple {
                                     local_addr,
                                     peer_addr,
                                 },
                                 stream,
-                            )
+                            ))
                         }),
                         Ok(Err(err)) => Err(err),
                         Err(_) => Err(io::Error::new(

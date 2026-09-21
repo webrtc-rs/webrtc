@@ -191,11 +191,13 @@ impl RTCTurnRelayer {
         }
 
         // Nothing to re-sign unless every live client's allocation is established; a client
-        // still mid-Allocate has no allocation to keep.
-        if self
-            .clients
-            .values()
-            .any(|managed| managed.relay_addr.is_none())
+        // still mid-Allocate has no allocation to keep. A TCP connect still in flight is one
+        // of those too — its client does not exist yet, and would come up on the old password.
+        if !self.pending_tcp.is_empty()
+            || self
+                .clients
+                .values()
+                .any(|managed| managed.relay_addr.is_none())
         {
             return false;
         }
@@ -1413,6 +1415,83 @@ mod tests {
                     .iter()
                     .any(|e| matches!(e, RTCTurnRelayEventOut::TurnGatheringComplete)),
                 "{events:?}"
+            );
+        });
+    }
+
+    /// Beside an established UDP client, a credential-only change re-signs rather than
+    /// regathers. A TCP connect still in flight is a client still mid-Allocate, and must not
+    /// then come up on the old password: those are regathered, never re-signed.
+    #[test]
+    fn a_credential_change_during_a_tcp_connect_is_not_applied_to_the_old_credentials() {
+        futures::executor::block_on(async {
+            let udp_url = format!("turn:{}?transport=udp", turn_server());
+            let tcp_url = format!("turn:{}?transport=tcp", turn_server());
+            let servers = |credential: &str| {
+                vec![RTCIceServer {
+                    urls: vec![udp_url.clone(), tcp_url.clone()],
+                    username: "user".to_owned(),
+                    credential: credential.to_owned(),
+                }]
+            };
+            let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+            let mut relayer = RTCTurnRelayer::new(
+                vec![local_addr],
+                servers("pass"),
+                RTCIceTransportPolicy::Relay,
+                None,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+            );
+            relayer.gather().await.expect("gather");
+            let id = connect_id(&mut relayer);
+
+            // Bring the UDP client's allocation up: 401, the signed retry, success.
+            let answer = |relayer: &mut RTCTurnRelayer, response: StunMessage| {
+                relayer
+                    .handle_read(tagged(local_addr, turn_server(), &response.raw))
+                    .expect("the relayer takes its answer");
+            };
+            let first = relayer.poll_write().expect("the UDP Allocate");
+            let mut request = StunMessage::new();
+            request.raw = first.message.to_vec();
+            request.decode().unwrap();
+            answer(
+                &mut relayer,
+                build_turn_allocate_unauthorized(request.transaction_id),
+            );
+            let retry = relayer.poll_write().expect("the signed Allocate");
+            request.raw = retry.message.to_vec();
+            request.decode().unwrap();
+            let mut success = StunMessage::new();
+            success
+                .build(&[
+                    Box::new(request.transaction_id),
+                    Box::new(MessageType::new(
+                        rtc::stun::message::METHOD_ALLOCATE,
+                        CLASS_SUCCESS_RESPONSE,
+                    )),
+                    Box::new(rtc::turn::proto::relayaddr::RelayedAddress {
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        port: 49999,
+                    }),
+                    Box::new(rtc::turn::proto::lifetime::Lifetime(
+                        std::time::Duration::from_secs(600),
+                    )),
+                ])
+                .unwrap();
+            answer(&mut relayer, success);
+            let _ = events(&mut relayer);
+            assert!(
+                relayer
+                    .contains_local_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 49999))
+            );
+
+            relayer.update_configuration(servers("rotated"), RTCIceTransportPolicy::Relay);
+            assert_eq!(
+                relayer.on_tcp_connected(id, Ok(tcp_tuple())).unwrap(),
+                None,
+                "a client built from that connect would carry the old password"
             );
         });
     }
