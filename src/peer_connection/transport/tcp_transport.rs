@@ -618,6 +618,8 @@ mod tests {
             };
             let written = transport.write(&outgoing(stranger, &STUN)).await.unwrap();
             assert_eq!(written, 0, "nothing was sent");
+            // Proving an absence: on loopback anything written arrives in microseconds, so
+            // 200 ms of silence means nothing was written, not that it was slow.
             let mut probe = [0u8; 1];
             let read = futures::future::select(
                 Box::pin(theirs.read(&mut probe)),
