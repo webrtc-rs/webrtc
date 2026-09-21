@@ -2,6 +2,7 @@
 
 use rtc::ice::mdns::MulticastDnsMode;
 use rtc::peer_connection::transport::RTCIceCandidate;
+use rtc::shared::turn_framing::TurnStreamDecoder;
 use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM, ATTR_USERNAME};
 use rtc::stun::error_code::CODE_UNAUTHORIZED;
 use rtc::stun::message::{
@@ -11,6 +12,7 @@ use rtc::stun::message::{
 use rtc::stun::textattrs::{Nonce, Realm, Username};
 use rtc::turn::proto::lifetime::Lifetime;
 use rtc::turn::proto::relayaddr::RelayedAddress;
+use rtc::turn::proto::reqtrans::RequestedTransport;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,8 +22,8 @@ use webrtc::peer_connection::{
     RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionIceEvent,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::AsyncUdpSocket;
 use webrtc::runtime::channel;
+use webrtc::runtime::{AsyncTcpListener, AsyncUdpSocket};
 use webrtc::runtime::{Mutex, Sender};
 
 mod common;
@@ -834,5 +836,179 @@ fn test_ice_tcp_only_connection() {
 
         task_a.abort();
         task_b.abort();
+    });
+}
+
+/// The mock TURN server over TCP: the same answers as [`run_mock_turn_server`], on a stream,
+/// where STUN messages arrive back to back with no framing of their own (RFC 8656 §12.5).
+///
+/// `requested_tx` reports the REQUESTED-TRANSPORT protocol number of every Allocate, so a test
+/// can see that a client on TCP still asks for a UDP relay.
+async fn run_mock_tcp_turn_server(
+    listener: Arc<dyn AsyncTcpListener>,
+    relay_addr: SocketAddr,
+    requested_tx: Sender<u8>,
+) {
+    let Ok((stream, _)) = listener.accept().await else {
+        return;
+    };
+    let mut decoder = TurnStreamDecoder::new();
+    let mut buf = vec![0u8; 2048];
+    loop {
+        let n = match stream.read(&mut buf).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => n,
+        };
+        decoder.extend_from_slice(&buf[..n]);
+        while let Ok(Some(raw)) = decoder.next_message() {
+            let mut msg = StunMessage::new();
+            msg.raw = raw;
+            if msg.decode().is_err() {
+                continue;
+            }
+            let response = match msg.typ.method {
+                METHOD_ALLOCATE => {
+                    let mut requested = RequestedTransport::default();
+                    if requested.get_from(&msg).is_ok() {
+                        let _ = requested_tx.try_send(requested.protocol.0);
+                    }
+                    if msg.get(ATTR_NONCE).is_ok() {
+                        build_turn_allocate_success(msg.transaction_id, relay_addr)
+                    } else {
+                        build_turn_allocate_unauthorized(msg.transaction_id)
+                    }
+                }
+                METHOD_REFRESH => build_turn_refresh_success(msg.transaction_id),
+                METHOD_CREATE_PERMISSION => {
+                    build_turn_create_permission_success(msg.transaction_id)
+                }
+                _ => continue,
+            };
+            if stream.write_all(&response.raw).await.is_err() {
+                return;
+            }
+        }
+    }
+}
+
+/// A relay-only peer connection given `ice_servers`; returns what it gathered once gathering
+/// completes, or panics if it does not within `wait`.
+async fn gather_relay_only(
+    ice_servers: Vec<RTCIceServer>,
+    wait: Duration,
+) -> Vec<RTCIceCandidateType> {
+    let mut media_engine = MediaEngine::default();
+    media_engine
+        .register_default_codecs()
+        .expect("Failed to register codecs");
+    let config = RTCConfigurationBuilder::new()
+        .with_ice_servers(ice_servers)
+        .with_ice_transport_policy(RTCIceTransportPolicy::Relay)
+        .build();
+    let candidates = Arc::new(Mutex::new(Vec::new()));
+    let (gathering_tx, mut gathering_rx) = channel(8);
+    let handler = Arc::new(CandidateTypeTracker {
+        candidates: candidates.clone(),
+        gathering_tx,
+    });
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let _ = pc.create_data_channel("channel1", None).await.unwrap();
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
+    pc.set_local_description(offer)
+        .await
+        .expect("Failed to set local description");
+    timeout(wait, gathering_rx.recv())
+        .await
+        .expect("Timed out waiting for relay gathering to complete");
+    let gathered = candidates.lock().await.clone();
+    let _ = pc.close().await;
+    gathered
+}
+
+/// webrtc#848: a relay candidate gathered through a TURN server reached over TCP, with the
+/// allocation itself still UDP.
+#[test]
+fn test_turn_relay_gathering_over_tcp_with_mock_turn_server() {
+    block_on(async {
+        let runtime = runtime();
+        let std_listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind mock TURN server");
+        let turn_addr = std_listener.local_addr().unwrap();
+        let listener = runtime
+            .wrap_tcp_listener(std_listener)
+            .expect("failed to wrap mock TURN listener");
+        let relay_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+        let (requested_tx, mut requested_rx) = channel(8);
+        let turn_task = runtime.spawn(Box::pin(run_mock_tcp_turn_server(
+            listener,
+            relay_addr,
+            requested_tx,
+        )));
+
+        let gathered = gather_relay_only(
+            vec![RTCIceServer {
+                urls: vec![format!("turn:{}?transport=tcp", turn_addr)],
+                username: "user".to_owned(),
+                credential: "pass".to_owned(),
+            }],
+            Duration::from_secs(5),
+        )
+        .await;
+
+        assert!(
+            gathered.contains(&RTCIceCandidateType::Relay),
+            "Expected a relay candidate over TCP, got {:?}",
+            gathered
+        );
+        assert!(
+            !gathered.contains(&RTCIceCandidateType::Host),
+            "Relay-only policy should not publish host candidates: {:?}",
+            gathered
+        );
+        let requested = timeout(Duration::from_secs(1), requested_rx.recv())
+            .await
+            .expect("the server saw an Allocate")
+            .expect("an Allocate");
+        assert_eq!(
+            requested, 17,
+            "over TCP the relay is still UDP (protocol 17)"
+        );
+
+        turn_task.abort();
+    });
+}
+
+/// A TURN server whose TCP port refuses the connection costs that server its relay, not the
+/// whole gathering: it completes, promptly, without one.
+#[test]
+fn test_turn_over_tcp_to_a_closed_port_completes_gathering_without_a_relay() {
+    block_on(async {
+        let closed = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap();
+
+        let gathered = gather_relay_only(
+            vec![RTCIceServer {
+                urls: vec![format!("turn:{}?transport=tcp", closed)],
+                username: "user".to_owned(),
+                credential: "pass".to_owned(),
+            }],
+            Duration::from_secs(5),
+        )
+        .await;
+
+        assert!(
+            !gathered.contains(&RTCIceCandidateType::Relay),
+            "no relay can come from a server that refused: {:?}",
+            gathered
+        );
     });
 }
