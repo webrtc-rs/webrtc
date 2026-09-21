@@ -309,6 +309,7 @@ impl RTCTurnRelayer {
                             turn_serv_addr: peer_addr.to_string(),
                             local_addr: *local_addr,
                             transport_protocol: TransportProtocol::UDP,
+                            requested_transport: TransportProtocol::UDP,
                             username: url.username.clone(),
                             password: url.password.clone(),
                             realm: String::new(),
