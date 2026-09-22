@@ -44,7 +44,7 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
-use std::io::IoSliceMut;
+use std::io::{self, IoSliceMut};
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -113,6 +113,10 @@ pub(crate) const DRIVER_TO_TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+/// How long a TCP connection to a TURN server may take before that server is given up on.
+/// Gathering waits for it, so it is bounded well under what an application waits for
+/// gathering to complete.
+const TURN_TCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The resolution at which an already-expired deadline is worth re-handling.
 ///
@@ -420,6 +424,8 @@ pub(crate) enum PeerConnectionDriverEvent {
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
     RemoteIceTcpPassiveCandidate(Candidate),
     IncomingTcpStream(FourTuple, Arc<dyn AsyncTcpStream>),
+    /// The outcome of a TCP connect the TURN relayer asked for.
+    TurnTcpConnected(u64, io::Result<(FourTuple, Arc<dyn AsyncTcpStream>)>),
     WriteNotify,
     UpdateIceConfiguration {
         ice_servers: Vec<RTCIceServer>,
@@ -1185,6 +1191,46 @@ where
                 self.turn_gathering_complete = true;
                 self.finish_gathering_if_ready().await;
             }
+            RTCTurnRelayEventOut::ConnectTcp { id, server } => {
+                // Connect off the driver: a server that drops the SYN would otherwise hold
+                // every peer connection event for as long as the attempt lasts.
+                let runtime = self.inner.runtime.clone();
+                let tx = self.inner.driver_event_tx.clone();
+                self.inner.runtime.spawn(Box::pin(async move {
+                    let result = match crate::runtime::timeout(
+                        &*runtime,
+                        TURN_TCP_CONNECT_TIMEOUT,
+                        runtime.connect_tcp(server),
+                    )
+                    .await
+                    {
+                        // A connected stream that cannot name both of its ends has no
+                        // four-tuple to route by; it is a failed connect, not a guess.
+                        Ok(Ok(stream)) => stream.local_addr().and_then(|local_addr| {
+                            let peer_addr = stream.peer_addr()?;
+                            Ok((
+                                FourTuple {
+                                    local_addr,
+                                    peer_addr,
+                                },
+                                stream,
+                            ))
+                        }),
+                        Ok(Err(err)) => Err(err),
+                        Err(_) => Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            format!(
+                                "no TCP connection to TURN server {server} within {TURN_TCP_CONNECT_TIMEOUT:?}"
+                            ),
+                        )),
+                    };
+                    // overflow: detached — this task's only job is to hand the result
+                    // over; a full channel parks it alone.
+                    let _ = tx
+                        .send(PeerConnectionDriverEvent::TurnTcpConnected(id, result))
+                        .await;
+                }));
+            }
         }
     }
 
@@ -1677,6 +1723,23 @@ where
                 trace!("TCP stream connection established: {:?}", four_tuple);
                 self.tcp_transport.register_stream(four_tuple, stream);
             }
+            PeerConnectionDriverEvent::TurnTcpConnected(id, result) => {
+                let (connected, stream) = match result {
+                    Ok((four_tuple, stream)) => (Ok(four_tuple), Some(stream)),
+                    Err(err) => (Err(err), None),
+                };
+                match self.turn_relayer.on_tcp_connected(id, connected) {
+                    Ok(Some(four_tuple)) => {
+                        if let Some(stream) = stream {
+                            trace!("TURN TCP connection established: {:?}", four_tuple);
+                            self.tcp_transport.register_turn_stream(four_tuple, stream);
+                        }
+                    }
+                    // Not wanted any more, or failed: an unregistered stream closes on drop.
+                    Ok(None) => {}
+                    Err(err) => error!("TURN over TCP could not start: {}", err),
+                }
+            }
             PeerConnectionDriverEvent::Close => {
                 if let Err(err) = self.turn_relayer.close() {
                     error!("Failed to close turn_relayer: {}", err);
@@ -2020,6 +2083,20 @@ where
         // 2.a stun_gatherer poll_event()
         while let Some(event) = self.stun_gatherer.poll_event() {
             self.handle_stun_gather_event(event).await;
+        }
+
+        // TURN connections: a loss ends the client using it, and a client the relayer let go
+        // of gives its connection back. Before 2.b, so what follows is handled in this pass.
+        for four_tuple in self.tcp_transport.take_closed_turn_streams() {
+            if let Err(err) = self
+                .turn_relayer
+                .handle_event(RTCTurnRelayEventIn::SocketWriteFailure(four_tuple))
+            {
+                error!("TURN relayer could not drop {:?}: {}", four_tuple, err);
+            }
+        }
+        for four_tuple in self.turn_relayer.take_released_tcp_streams() {
+            self.tcp_transport.release_turn_stream(&four_tuple);
         }
 
         // 2.b turn_relayer poll_event()
