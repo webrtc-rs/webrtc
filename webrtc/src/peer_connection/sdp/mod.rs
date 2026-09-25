@@ -323,6 +323,7 @@ pub(crate) struct AddDataMediaSectionParams {
     ice_params: RTCIceParameters,
     dtls_role: ConnectionRole,
     ice_gathering_state: RTCIceGatheringState,
+    max_message_size: u32,
 }
 
 pub(crate) async fn add_data_media_section(
@@ -362,6 +363,10 @@ pub(crate) async fn add_data_media_section(
     .with_value_attribute(ATTR_KEY_MID.to_owned(), params.mid_value)
     .with_property_attribute(RTCRtpTransceiverDirection::Sendrecv.to_string())
     .with_property_attribute("sctp-port:5000".to_owned())
+    .with_value_attribute(
+        ATTR_KEY_MAX_MESSAGE_SIZE.to_owned(),
+        params.max_message_size.to_string(),
+    )
     .with_ice_credentials(
         params.ice_params.username_fragment,
         params.ice_params.password,
@@ -801,6 +806,8 @@ pub(crate) struct PopulateSdpParams {
     pub(crate) connection_role: ConnectionRole,
     pub(crate) ice_gathering_state: RTCIceGatheringState,
     pub(crate) match_bundle_group: Option<String>,
+    /// Advertised as `a=max-message-size` in the application media section.
+    pub(crate) sctp_max_message_size: u32,
 }
 
 /// populate_sdp serializes a PeerConnections state into an SDP
@@ -842,6 +849,7 @@ pub(crate) async fn populate_sdp(
                 ice_params: ice_params.clone(),
                 dtls_role: params.connection_role,
                 ice_gathering_state: params.ice_gathering_state,
+                max_message_size: params.sctp_max_message_size,
             };
             d = add_data_media_section(d, &media_dtls_fingerprints, candidates, params).await?;
             true

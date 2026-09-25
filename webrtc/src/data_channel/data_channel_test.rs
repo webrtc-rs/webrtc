@@ -1410,6 +1410,13 @@ async fn create_data_channel_with_max_message_size(
     let _ = offer_gathering_complete.recv().await;
     let mut offer = offer_pc.local_description().await.unwrap();
 
+    // Replace the attribute the offer already advertises.
+    offer.sdp = offer
+        .sdp
+        .lines()
+        .filter(|line| !line.starts_with("a=max-message-size:"))
+        .map(|line| format!("{line}\r\n"))
+        .collect();
     if let Some(remote_max_message_size) = remote_max_message_size {
         offer
             .sdp
@@ -1846,5 +1853,97 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
         panic!();
     }
 
+    Ok(())
+}
+
+/// Sends one `message_len` byte message from an offerer to an answerer that
+/// both use `setting_engine`, and returns the length the answerer received.
+async fn receive_message_of_len(
+    setting_engine: SettingEngine,
+    message_len: usize,
+) -> Result<usize> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new()
+        .with_media_engine(m)
+        .with_setting_engine(setting_engine)
+        .build();
+
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+    let (received_tx, mut received_rx) = mpsc::channel::<usize>(1);
+    answer_pc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
+        let received_tx = received_tx.clone();
+        Box::pin(async move {
+            dc.on_message(Box::new(move |msg: DataChannelMessage| {
+                let received_tx = received_tx.clone();
+                Box::pin(async move {
+                    let _ = received_tx.send(msg.data.len()).await;
+                })
+            }));
+        })
+    }));
+
+    let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
+    let dc2 = Arc::clone(&dc);
+    dc.on_open(Box::new(move || {
+        Box::pin(async move {
+            let message = bytes::Bytes::from(vec![7u8; message_len]);
+            dc2.send(&message).await.unwrap();
+        })
+    }));
+
+    signal_pair(&mut offer_pc, &mut answer_pc).await?;
+
+    let received = tokio::time::timeout(Duration::from_secs(10), received_rx.recv())
+        .await
+        .expect("message was not received")
+        .expect("receiver closed");
+
+    close_pair_now(&offer_pc, &answer_pc).await;
+    Ok(received)
+}
+
+#[tokio::test]
+async fn test_data_channel_receives_default_max_message_size() -> Result<()> {
+    // RFC 8841: 64 KiB is the default limit, so a message of exactly that
+    // size must be receivable without any configuration.
+    let len = SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE as usize;
+    assert_eq!(
+        receive_message_of_len(SettingEngine::default(), len).await?,
+        len
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_data_channel_receives_message_larger_than_64k() -> Result<()> {
+    const LEN: usize = 200_000;
+    let mut s = SettingEngine::default();
+    s.set_sctp_max_message_size_can_receive(256 * 1024);
+    s.set_sctp_max_message_size_can_send(SctpMaxMessageSize::Unbounded);
+    assert_eq!(receive_message_of_len(s, LEN).await?, LEN);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_local_description_advertises_max_message_size() -> Result<()> {
+    for (can_receive, expected) in [(None, 65536), (Some(256 * 1024), 262144)] {
+        let mut s = SettingEngine::default();
+        if let Some(can_receive) = can_receive {
+            s.set_sctp_max_message_size_can_receive(can_receive);
+        }
+        let api = APIBuilder::new().with_setting_engine(s).build();
+        let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+        let _ = pc.create_data_channel(EXPECTED_LABEL, None).await?;
+        let offer = pc.create_offer(None).await?;
+        assert!(
+            offer
+                .sdp
+                .contains(&format!("a=max-message-size:{expected}\r\n")),
+            "offer does not advertise max-message-size {expected}:\n{}",
+            offer.sdp
+        );
+        pc.close().await?;
+    }
     Ok(())
 }
