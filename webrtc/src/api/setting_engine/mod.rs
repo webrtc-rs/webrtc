@@ -402,9 +402,10 @@ impl SettingEngine {
 
     /// set_sctp_max_message_size_can_receive sets the largest data channel message this peer
     /// accepts. It is advertised to the remote peer with the SDP `max-message-size` attribute
-    /// (RFC 8841) and sizes the receive buffer of non-detached data channels, which drop any
-    /// message larger than it. Defaults to 64 KiB, the value peers assume when the attribute
-    /// is absent. Passing 0 restores the default.
+    /// (RFC 8841), sizes the receive buffer of non-detached data channels, which drop any
+    /// message larger than it, and raises the SCTP receive window to at least this size so
+    /// such a message can be reassembled. Defaults to 64 KiB, the value peers assume when the
+    /// attribute is absent. Passing 0 restores the default.
     pub fn set_sctp_max_message_size_can_receive(&mut self, max_message_size_can_receive: u32) {
         self.sctp_max_message_size_can_receive = max_message_size_can_receive
     }

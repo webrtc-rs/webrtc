@@ -1926,6 +1926,18 @@ async fn test_data_channel_receives_message_larger_than_64k() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_data_channel_receives_message_larger_than_sctp_receive_buffer() -> Result<()> {
+    // Larger than the association's default 1 MiB receive buffer, which would
+    // otherwise stall reassembly.
+    const LEN: usize = 3_000_000;
+    let mut s = SettingEngine::default();
+    s.set_sctp_max_message_size_can_receive(4 * 1024 * 1024);
+    s.set_sctp_max_message_size_can_send(SctpMaxMessageSize::Unbounded);
+    assert_eq!(receive_message_of_len(s, LEN).await?, LEN);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_local_description_advertises_max_message_size() -> Result<()> {
     for (can_receive, expected) in [(None, 65536), (Some(256 * 1024), 262144)] {
         let mut s = SettingEngine::default();
