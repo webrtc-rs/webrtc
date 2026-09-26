@@ -21,7 +21,7 @@
 //!
 //! ```no_run
 //! # use webrtc::rtp_transceiver::{RtpTransceiver, RTCRtpTransceiverDirection};
-//! # use std::sync::Arc;
+//! # use std::sync::{Arc, Weak};
 //! # async fn configure_transceiver(transceiver: Arc<dyn RtpTransceiver>) -> webrtc::error::Result<()> {
 //! // Set preferred direction to receive only
 //! transceiver.set_direction(RTCRtpTransceiverDirection::Recvonly).await?;
@@ -59,7 +59,7 @@ pub use rtc::rtp_transceiver::{
 };
 use rtc::shared::error::Result;
 use rtc::statistics::report::RTCStatsReport;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Instant;
 
 /// An RTP Receiver that receives media from a remote peer.
@@ -212,33 +212,39 @@ pub(crate) struct RtpTransceiverImpl {
     id: RTCRtpTransceiverId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef>,
+    inner: Weak<PeerConnectionRef>,
 
     sender: Mutex<Option<Arc<dyn RtpSender>>>,
     receiver: Mutex<Option<Arc<dyn RtpReceiver>>>,
 }
 
 impl RtpTransceiverImpl {
+    /// The owning connection, or `ErrConnectionClosed` once it is gone. The back-reference is
+    /// `Weak` because `PeerConnectionRef` owns this object: a strong one would form a cycle that
+    /// keeps the whole connection alive after `close()` and drop (webrtc#906).
+    fn peer_connection(&self) -> Result<Arc<PeerConnectionRef>> {
+        self.inner.upgrade().ok_or(Error::ErrConnectionClosed)
+    }
     /// Create a new rtp transceiver wrapper
     pub(crate) fn new(id: RTCRtpTransceiverId, inner: Arc<PeerConnectionRef>) -> Self {
         Self {
             id,
-            inner,
+            inner: Arc::downgrade(&inner),
             sender: Mutex::new(None),
             receiver: Mutex::new(None),
         }
     }
 
     pub(crate) async fn set_sender(&self, rtp_sender: Option<Arc<dyn RtpSender>>) {
+        // Only called by the owning connection's own methods, which keep it alive.
+        let Some(pc) = self.inner.upgrade() else {
+            return;
+        };
         let mut sender = self.sender.lock().await;
 
         if let Some(rtp_sender) = sender.take() {
             let track_id = rtp_sender.track().track_id().await;
-            self.inner
-                .track_local_events_tx
-                .lock()
-                .await
-                .remove(&track_id);
+            pc.track_local_events_tx.lock().await.remove(&track_id);
             rtp_sender.track().unbind().await;
         }
 
@@ -250,8 +256,7 @@ impl RtpTransceiverImpl {
             // routes inbound RTCP tagged with this track id to `evt_tx`.
             let track_id = rtp_sender.track().track_id().await;
             let (evt_tx, evt_rx) = channel(DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY);
-            self.inner
-                .track_local_events_tx
+            pc.track_local_events_tx
                 .lock()
                 .await
                 .insert(track_id, evt_tx);
@@ -261,7 +266,7 @@ impl RtpTransceiverImpl {
                     TrackLocalContext {
                         rtp_sender_id: self.id.into(),
                         rtp_parameters: params.rtp_parameters,
-                        driver_event_tx: self.inner.driver_event_tx.clone(),
+                        driver_event_tx: pc.driver_event_tx.clone(),
                     },
                     evt_rx,
                 )
@@ -285,7 +290,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn mid(&self) -> Result<Option<String>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_transceiver(self.id)
@@ -296,7 +302,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
 
     async fn sender(&self) -> Result<Option<Arc<dyn RtpSender>>> {
         {
-            let mut peer_connection = self.inner.core.lock().await;
+            let pc = self.peer_connection()?;
+            let mut peer_connection = pc.core.lock().await;
             let _ = peer_connection
                 .rtp_transceiver(self.id)
                 .ok_or(Error::ErrRTPTransceiverNotExisted)?;
@@ -308,7 +315,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
 
     async fn receiver(&self) -> Result<Option<Arc<dyn RtpReceiver>>> {
         {
-            let mut peer_connection = self.inner.core.lock().await;
+            let pc = self.peer_connection()?;
+            let mut peer_connection = pc.core.lock().await;
 
             let _ = peer_connection
                 .rtp_transceiver(self.id)
@@ -320,7 +328,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn direction(&self) -> Result<RTCRtpTransceiverDirection> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_transceiver(self.id)
@@ -329,7 +338,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn set_direction(&self, direction: RTCRtpTransceiverDirection) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_transceiver(self.id)
@@ -340,7 +350,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn current_direction(&self) -> Result<RTCRtpTransceiverDirection> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_transceiver(self.id)
@@ -349,7 +360,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn stop(&self) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_transceiver(self.id)
@@ -358,7 +370,8 @@ impl RtpTransceiver for RtpTransceiverImpl {
     }
 
     async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_transceiver(self.id)

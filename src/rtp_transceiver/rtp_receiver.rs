@@ -8,7 +8,7 @@ use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchro
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCapabilities, RTCRtpReceiveParameters, RtpCodecKind};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Instant;
 
 /// Concrete async rtp receiver implementation (generic over interceptor type).
@@ -19,19 +19,29 @@ pub(crate) struct RtpReceiverImpl {
     id: RTCRtpReceiverId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef>,
+    inner: Weak<PeerConnectionRef>,
 
     track: Arc<dyn TrackRemote>,
 }
 
 impl RtpReceiverImpl {
+    /// The owning connection, or `ErrConnectionClosed` once it is gone. The back-reference is
+    /// `Weak` because `PeerConnectionRef` owns this object: a strong one would form a cycle that
+    /// keeps the whole connection alive after `close()` and drop (webrtc#906).
+    fn peer_connection(&self) -> Result<Arc<PeerConnectionRef>> {
+        self.inner.upgrade().ok_or(Error::ErrConnectionClosed)
+    }
     /// Create a new rtp receiver wrapper
     pub(crate) fn new(
         id: RTCRtpReceiverId,
         inner: Arc<PeerConnectionRef>,
         track: Arc<dyn TrackRemote>,
     ) -> Self {
-        Self { id, inner, track }
+        Self {
+            id,
+            inner: Arc::downgrade(&inner),
+            track,
+        }
     }
 }
 
@@ -48,7 +58,8 @@ impl RtpReceiver for RtpReceiverImpl {
     }
 
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_receiver(self.id)
@@ -57,7 +68,8 @@ impl RtpReceiver for RtpReceiverImpl {
     }
 
     async fn get_parameters(&self) -> Result<RTCRtpReceiveParameters> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_receiver(self.id)
@@ -67,7 +79,8 @@ impl RtpReceiver for RtpReceiverImpl {
     }
 
     async fn get_contributing_sources(&self) -> Result<Vec<RTCRtpContributingSource>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_receiver(self.id)
@@ -78,7 +91,8 @@ impl RtpReceiver for RtpReceiverImpl {
     }
 
     async fn get_synchronization_sources(&self) -> Result<Vec<RTCRtpSynchronizationSource>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_receiver(self.id)
@@ -89,14 +103,16 @@ impl RtpReceiver for RtpReceiverImpl {
     }
 
     async fn get_stats(&self, now: Instant) -> Result<RTCStatsReport> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
         peer_connection
             .rtp_receiver(self.id)
             .ok_or(Error::ErrRTPReceiverNotExisted)?;
         Ok(peer_connection.get_stats(now, StatsSelector::Receiver(self.id)))
     }
     async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         // Walk under the lock and keep only the ids: a borrowed view cannot cross an await, so
         // the handle re-walks per call and carries the ids so `id()` can stay synchronous.
@@ -113,7 +129,7 @@ impl RtpReceiver for RtpReceiverImpl {
                 id,
                 ice_id,
                 DtlsRoute::Receiver(self.id),
-                Arc::clone(&self.inner),
+                Arc::clone(&pc),
             )) as Arc<dyn DtlsTransport>
         }))
     }
