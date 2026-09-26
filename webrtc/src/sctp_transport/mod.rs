@@ -33,6 +33,9 @@ use crate::stats::{ICETransportStats, PeerConnectionStats};
 
 const SCTP_MAX_CHANNELS: u16 = u16::MAX;
 
+/// The SCTP association's default receive buffer (`INITIAL_RECV_BUF_SIZE` in the sctp crate).
+const DEFAULT_SCTP_RECEIVE_BUFFER_SIZE: u32 = 1024 * 1024;
+
 pub type OnDataChannelHdlrFn = Box<
     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
@@ -152,6 +155,12 @@ impl RTCSctpTransport {
             remote_caps.max_message_size,
             self.setting_engine.sctp_max_message_size_can_send.as_u32(),
         );
+        // A message is only delivered once it is fully reassembled, so the receive
+        // window must fit the largest message we advertise or reassembly stalls.
+        let max_receive_buffer_size = self
+            .setting_engine
+            .get_sctp_max_message_size_can_receive()
+            .max(DEFAULT_SCTP_RECEIVE_BUFFER_SIZE);
 
         if let Some(net_conn) = &dtls_transport.conn().await {
             let sctp_association = loop {
@@ -166,7 +175,7 @@ impl RTCSctpTransport {
                     },
                     association = sctp::association::Association::client(sctp::association::Config {
                         net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
-                        max_receive_buffer_size: 0,
+                        max_receive_buffer_size,
                         max_message_size,
                         mtu: 0,
                         name: String::new(),

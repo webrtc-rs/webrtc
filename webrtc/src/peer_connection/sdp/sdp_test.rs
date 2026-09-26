@@ -3,7 +3,7 @@ use sdp::description::common::Attribute;
 
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
-use crate::api::setting_engine::SettingEngine;
+use crate::api::setting_engine::{SctpMaxMessageSize, SettingEngine};
 use crate::api::APIBuilder;
 use crate::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use crate::dtls_transport::RTCDtlsTransport;
@@ -590,6 +590,7 @@ async fn fingerprint_test(
         connection_role: ConnectionRole::Active,
         ice_gathering_state: RTCIceGatheringState::New,
         match_bundle_group: None,
+        sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
     };
 
     let s = populate_sdp(
@@ -787,6 +788,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -893,6 +895,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -974,6 +977,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -1072,6 +1076,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: Some("audio".to_owned()),
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -1138,6 +1143,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: Some("".to_owned()),
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -1248,6 +1254,7 @@ async fn test_populate_sdp() -> Result<()> {
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
+            sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -1403,6 +1410,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
         ice_gathering_state: RTCIceGatheringState::Complete,
         match_bundle_group: None,
+        sctp_max_message_size: SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE,
     };
     let offer_sdp = populate_sdp(
         d,

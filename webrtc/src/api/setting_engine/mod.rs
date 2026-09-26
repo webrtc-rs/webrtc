@@ -106,9 +106,22 @@ pub struct SettingEngine {
     pub(crate) enable_sender_rtx: bool,
     /// Determines the max size of any message that may be sent through an SCTP transport.
     pub(crate) sctp_max_message_size_can_send: SctpMaxMessageSize,
+    /// Determines the max size of any message that may be received through an SCTP transport.
+    /// 0 means [`SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE`].
+    pub(crate) sctp_max_message_size_can_receive: u32,
 }
 
 impl SettingEngine {
+    /// get_sctp_max_message_size_can_receive returns the largest data channel message this
+    /// peer accepts, which is advertised to the remote peer as `a=max-message-size`.
+    pub(crate) fn get_sctp_max_message_size_can_receive(&self) -> u32 {
+        if self.sctp_max_message_size_can_receive != 0 {
+            self.sctp_max_message_size_can_receive
+        } else {
+            SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE
+        }
+    }
+
     /// get_receive_mtu returns the configured MTU. If SettingEngine's MTU is configured to 0 it returns the default
     pub(crate) fn get_receive_mtu(&self) -> usize {
         if self.receive_mtu != 0 {
@@ -385,5 +398,15 @@ impl SettingEngine {
         max_message_size_can_send: SctpMaxMessageSize,
     ) {
         self.sctp_max_message_size_can_send = max_message_size_can_send
+    }
+
+    /// set_sctp_max_message_size_can_receive sets the largest data channel message this peer
+    /// accepts. It is advertised to the remote peer with the SDP `max-message-size` attribute
+    /// (RFC 8841), sizes the receive buffer of non-detached data channels, which drop any
+    /// message larger than it, and raises the SCTP receive window to at least this size so
+    /// such a message can be reassembled. Defaults to 64 KiB, the value peers assume when the
+    /// attribute is absent. Passing 0 restores the default.
+    pub fn set_sctp_max_message_size_can_receive(&mut self, max_message_size_can_receive: u32) {
+        self.sctp_max_message_size_can_receive = max_message_size_can_receive
     }
 }

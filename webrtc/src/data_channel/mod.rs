@@ -29,9 +29,6 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{DataChannelStats, StatsReportType};
 
-/// message size limit for Chromium
-const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
-
 pub type OnMessageHdlrFn = Box<
     dyn (FnMut(DataChannelMessage) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
@@ -286,9 +283,11 @@ impl RTCDataChannel {
             let on_close_handler = Arc::clone(&self.on_close_handler);
             let on_error_handler = Arc::clone(&self.on_error_handler);
             let notify_rx = self.notify_tx.clone();
+            let buffer_size = self.setting_engine.get_sctp_max_message_size_can_receive() as usize;
             tokio::spawn(async move {
                 RTCDataChannel::read_loop(
                     notify_rx,
+                    buffer_size,
                     dc,
                     ready_state,
                     on_message_handler,
@@ -308,13 +307,16 @@ impl RTCDataChannel {
 
     async fn read_loop(
         notify_rx: Arc<Notify>,
+        buffer_size: usize,
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
         on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
         on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
         on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
     ) {
-        let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
+        // Must hold the largest message we advertise: SCTP drops a message
+        // that does not fit and the channel is closed with ErrShortBuffer.
+        let mut buffer = vec![0u8; buffer_size];
         loop {
             let (n, is_string) = tokio::select! {
                 _ = notify_rx.notified() => {
