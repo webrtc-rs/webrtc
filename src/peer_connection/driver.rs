@@ -1259,7 +1259,13 @@ where
 
                         let should_announce = {
                             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-                            insert_data_channel_event_sender(&mut data_channels, channel_id, evt_tx)
+                            // Checked under the map's lock; see `end_event_streams`.
+                            !self.inner.is_closing()
+                                && insert_data_channel_event_sender(
+                                    &mut data_channels,
+                                    channel_id,
+                                    evt_tx,
+                                )
                         };
 
                         if should_announce {
@@ -1383,13 +1389,18 @@ where
                                 rtp_transceiver.set_receiver(Some(receiver)).await;
                             }
 
-                            self.inner
-                                .track_remote_events_tx
-                                .lock()
-                                .await
-                                .insert(track_id.clone(), (evt_tx, Arc::clone(&track_remote)));
-
-                            pending_on_track = Some(track_remote);
+                            {
+                                let mut track_remotes =
+                                    self.inner.track_remote_events_tx.lock().await;
+                                // Checked under the map's lock; see `end_event_streams`.
+                                if !self.inner.is_closing() {
+                                    track_remotes.insert(
+                                        track_id.clone(),
+                                        (evt_tx, Arc::clone(&track_remote)),
+                                    );
+                                    pending_on_track = Some(track_remote);
+                                }
+                            }
                         }
                     }
                 }

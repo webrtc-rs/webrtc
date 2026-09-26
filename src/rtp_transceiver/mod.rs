@@ -267,10 +267,13 @@ impl RtpTransceiverImpl {
             // routes inbound RTCP tagged with this track id to `evt_tx`.
             let track_id = rtp_sender.track().track_id().await;
             let (evt_tx, evt_rx) = channel(DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY);
-            pc.track_local_events_tx
-                .lock()
-                .await
-                .insert(track_id, evt_tx);
+            {
+                let mut track_locals = pc.track_local_events_tx.lock().await;
+                // Checked under the map's lock; see `PeerConnectionRef::end_event_streams`.
+                if !pc.is_closing() {
+                    track_locals.insert(track_id, evt_tx);
+                }
+            }
             rtp_sender
                 .track()
                 .bind(
