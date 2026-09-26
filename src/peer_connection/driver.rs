@@ -563,6 +563,15 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
+        // Release TURN allocations while the old UDP sockets still exist. Rebinding drops them
+        // below, and a Refresh(0) sent from a new socket would not match the allocation's
+        // 5-tuple, leaving it on the server until it expires. The initial bind has no previous
+        // generation to release.
+        if !self.udp_sockets.is_empty() {
+            self.turn_relayer.close()?;
+            self.poll_writes().await?;
+        }
+
         // Drop before binding — see above. Also drops every accepted TCP stream, which is
         // correct: they belong to the generation being replaced.
         self.udp_sockets.clear();
@@ -766,9 +775,7 @@ where
             // momentarily full channel), this check still guarantees the loop —
             // and thus a dedicated reactor thread — terminates instead of leaking.
             if self.inner.closing.load(Ordering::Acquire) {
-                if let Err(err) = self.turn_relayer.close() {
-                    error!("Failed to close turn_relayer: {}", err);
-                }
+                self.release_turn_allocations().await;
                 return Ok(());
             }
 
@@ -1678,9 +1685,7 @@ where
                 self.tcp_transport.register_stream(four_tuple, stream);
             }
             PeerConnectionDriverEvent::Close => {
-                if let Err(err) = self.turn_relayer.close() {
-                    error!("Failed to close turn_relayer: {}", err);
-                }
+                self.release_turn_allocations().await;
                 return true;
             }
         }
@@ -1835,6 +1840,18 @@ where
             messages.push(message);
         }
         messages
+    }
+
+    /// Releases every TURN allocation (Refresh with LIFETIME=0) and sends the releases before
+    /// the driver stops, so the server frees them now rather than when their lifetime expires
+    /// (webrtc#903). The sockets are about to go, so this is the last chance to send them.
+    async fn release_turn_allocations(&mut self) {
+        if let Err(err) = self.turn_relayer.close() {
+            error!("Failed to close turn_relayer: {}", err);
+        }
+        if let Err(err) = self.poll_writes().await {
+            error!("Failed to send TURN allocation releases: {}", err);
+        }
     }
 
     async fn poll_writes(&mut self) -> Result<()> {
