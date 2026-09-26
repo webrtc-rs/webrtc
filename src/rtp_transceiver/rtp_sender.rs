@@ -10,7 +10,7 @@ use rtc::rtp_transceiver::rtp_sender::{
 };
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Instant;
 
 /// Concrete async rtp sender implementation (generic over interceptor type).
@@ -21,19 +21,30 @@ pub(crate) struct RtpSenderImpl {
     id: RTCRtpSenderId,
 
     /// Inner PeerConnection Reference
-    inner: Arc<PeerConnectionRef>,
+    inner: Weak<PeerConnectionRef>,
 
     track: Arc<dyn TrackLocal>,
 }
 
 impl RtpSenderImpl {
+    /// The owning connection, or `ErrConnectionClosed` once it is gone. The back-reference is
+    /// `Weak` because `PeerConnectionRef` owns this object: a strong one would form a cycle that
+    /// keeps the whole connection alive after `close()` and drop (webrtc#906).
+    fn peer_connection(&self) -> Result<Arc<PeerConnectionRef>> {
+        self.inner.upgrade().ok_or(Error::ErrConnectionClosed)
+    }
+
     /// Create a new rtp sender wrapper
     pub(crate) fn new(
         id: RTCRtpSenderId,
         inner: Arc<PeerConnectionRef>,
         track: Arc<dyn TrackLocal>,
     ) -> Self {
-        Self { id, inner, track }
+        Self {
+            id,
+            inner: Arc::downgrade(&inner),
+            track,
+        }
     }
 }
 
@@ -50,7 +61,8 @@ impl RtpSender for RtpSenderImpl {
     }
 
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_sender(self.id)
@@ -63,7 +75,8 @@ impl RtpSender for RtpSenderImpl {
         parameters: RTCRtpSendParameters,
         set_parameter_options: Option<RTCSetParameterOptions>,
     ) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_sender(self.id)
@@ -72,7 +85,8 @@ impl RtpSender for RtpSenderImpl {
     }
 
     async fn get_parameters(&self) -> Result<RTCRtpSendParameters> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         Ok(peer_connection
             .rtp_sender(self.id)
@@ -82,7 +96,8 @@ impl RtpSender for RtpSenderImpl {
     }
 
     async fn replace_track(&self, track: Arc<dyn TrackLocal>) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_sender(self.id)
@@ -91,7 +106,8 @@ impl RtpSender for RtpSenderImpl {
     }
 
     async fn set_streams(&self, streams: Vec<MediaStreamId>) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         peer_connection
             .rtp_sender(self.id)
@@ -101,14 +117,16 @@ impl RtpSender for RtpSenderImpl {
     }
 
     async fn get_stats(&self, now: Instant) -> Result<RTCStatsReport> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
         peer_connection
             .rtp_sender(self.id)
             .ok_or(Error::ErrRTPSenderNotExisted)?;
         Ok(peer_connection.get_stats(now, StatsSelector::Sender(self.id)))
     }
     async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>> {
-        let mut peer_connection = self.inner.core.lock().await;
+        let pc = self.peer_connection()?;
+        let mut peer_connection = pc.core.lock().await;
 
         // Walk under the lock and keep only the ids: a borrowed view cannot cross an await, so
         // the handle re-walks per call and carries the ids so `id()` can stay synchronous.
@@ -125,7 +143,7 @@ impl RtpSender for RtpSenderImpl {
                 id,
                 ice_id,
                 DtlsRoute::Sender(self.id),
-                Arc::clone(&self.inner),
+                Arc::clone(&pc),
             )) as Arc<dyn DtlsTransport>
         }))
     }

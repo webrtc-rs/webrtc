@@ -447,11 +447,15 @@ pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
     ///
     /// Idempotent: closing an already-closed connection succeeds. Pending
     /// [`DataChannel::send`] calls blocked awaiting
-    /// capacity are woken with [`Error::ErrDataChannelClosed`].
+    /// capacity are woken with [`Error::ErrDataChannelClosed`], and every event stream ends:
+    /// [`DataChannel::poll`], [`TrackRemote::poll`](crate::media_stream::track_remote::TrackRemote::poll)
+    /// and [`TrackLocal::poll`](crate::media_stream::track_local::TrackLocal::poll) return `None`
+    /// once the events already queued have been read.
     ///
     /// # Errors
     ///
-    /// Returns an error if the driver could not be reached to perform the shutdown.
+    /// Returns an error if the underlying `rtc` peer connection fails to close. Failing to reach
+    /// the driver is not an error: `close()` stops it either way.
     ///
     /// # Specification
     ///
@@ -889,6 +893,28 @@ fn will_restart_ice(core: &RTCPeerConnection, desc: &RTCSessionDescription) -> b
 const WRITE_YIELD_INTERVAL: usize = 128;
 
 impl PeerConnectionRef {
+    /// Whether `close()`, `Drop` or a driver exit has begun shutting the connection down.
+    #[inline]
+    pub(crate) fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
+    }
+
+    /// Ends every application-facing event stream, so a [`DataChannel::poll`],
+    /// [`TrackRemote::poll`](crate::media_stream::track_remote::TrackRemote::poll) or
+    /// [`TrackLocal::poll`](crate::media_stream::track_local::TrackLocal::poll) blocked on one
+    /// returns `None` once the events already queued have been read, instead of waiting forever
+    /// for events a stopped driver will never deliver.
+    ///
+    /// Call only after `closing` is set. Every sender is inserted under its map's lock after
+    /// checking [`is_closing`](Self::is_closing), so once this has run no new sender can
+    /// appear: an insert that took the lock first is cleared here, and one that takes it later
+    /// sees `closing` and skips.
+    pub(crate) async fn end_event_streams(&self) {
+        self.data_channel_events_tx.lock().await.clear();
+        self.track_remote_events_tx.lock().await.clear();
+        self.track_local_events_tx.lock().await.clear();
+    }
+
     /// Marks that the next gathering pass must rebind the UDP sockets.
     ///
     /// A no-op unless the application asked for it through
@@ -996,6 +1022,7 @@ impl PeerConnectionImpl {
         // loop to completion.
         let inner = peer_connection.inner.clone();
         let run_driver = async move {
+            let stopped_inner = Arc::clone(&inner);
             let mut driver = PeerConnectionDriver::new(
                 inner,
                 udp_addrs,
@@ -1016,6 +1043,11 @@ impl PeerConnectionImpl {
             // send() cannot hang waiting for a drain that will never come — the driver no
             // longer drains outstanding_bytes. Idempotent when close()/Drop already set it.
             driver.signal_stopped();
+            // No more events will be delivered, so end every stream an application task may be
+            // blocked on. This covers the stops that do not go through `close()`: `Drop` on a
+            // dedicated reactor, and an abnormal driver exit.
+            drop(driver);
+            stopped_inner.end_event_streams().await;
         };
 
         let driver_handle = if dedicated_reactor_pool_size > 0 {
@@ -1124,6 +1156,10 @@ impl PeerConnection for PeerConnectionImpl {
                 driver_handle.abort();
             }
         }
+
+        // The driver will deliver no more events, so end every stream an application task may
+        // be blocked on. `closing` is already set above, which `end_event_streams` requires.
+        self.inner.end_event_streams().await;
 
         Ok(())
     }
@@ -1309,7 +1345,10 @@ impl PeerConnection for PeerConnectionImpl {
         let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
         {
             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-            data_channels.insert(channel_id, evt_tx);
+            // Racing a `close()` that has already ended the streams: leave this one ended too.
+            if !self.inner.is_closing() {
+                data_channels.insert(channel_id, evt_tx);
+            }
         }
 
         self.inner.wake_writes().await;
@@ -1391,7 +1430,9 @@ impl PeerConnection for PeerConnectionImpl {
             Arc::clone(&self.inner),
             track,
         ));
-        rtp_transceiver.set_sender(Some(Arc::clone(&sender))).await;
+        rtp_transceiver
+            .set_sender(Some(Arc::clone(&sender)))
+            .await?;
 
         Ok(sender)
     }
@@ -1407,7 +1448,7 @@ impl PeerConnection for PeerConnectionImpl {
         let rtp_transceiver = rtp_transceivers
             .get(&sender.id().into())
             .ok_or(Error::ErrRTPTransceiverNotExisted)?;
-        rtp_transceiver.set_sender(None).await;
+        rtp_transceiver.set_sender(None).await?;
 
         Ok(())
     }
@@ -1437,7 +1478,7 @@ impl PeerConnection for PeerConnectionImpl {
             Arc::clone(&self.inner),
             track,
         ));
-        rtp_transceiver.set_sender(Some(sender)).await;
+        rtp_transceiver.set_sender(Some(sender)).await?;
 
         Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
     }
@@ -1473,7 +1514,7 @@ impl PeerConnection for PeerConnectionImpl {
                 Arc::clone(&self.inner),
                 Arc::new(TrackLocalStaticRTP::new(track)),
             ));
-            rtp_transceiver.set_sender(Some(sender)).await;
+            rtp_transceiver.set_sender(Some(sender)).await?;
         }
 
         Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
