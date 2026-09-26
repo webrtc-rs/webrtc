@@ -33,6 +33,7 @@ impl RtpSenderImpl {
     fn peer_connection(&self) -> Result<Arc<PeerConnectionRef>> {
         self.inner.upgrade().ok_or(Error::ErrConnectionClosed)
     }
+
     /// Create a new rtp sender wrapper
     pub(crate) fn new(
         id: RTCRtpSenderId,

@@ -235,22 +235,33 @@ impl RtpTransceiverImpl {
         }
     }
 
-    pub(crate) async fn set_sender(&self, rtp_sender: Option<Arc<dyn RtpSender>>) {
-        // Only called by the owning connection's own methods, which keep it alive.
-        let Some(pc) = self.inner.upgrade() else {
-            return;
+    /// Replace this transceiver's sender, wiring the new sender's track to the driver.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::ErrConnectionClosed`] once the owning connection is gone.
+    /// - Whatever the new sender's `get_parameters` fails with. Nothing changes in that case:
+    ///   the parameters are resolved before the current sender is unbound, so the transceiver
+    ///   keeps the sender it had rather than being left with none.
+    pub(crate) async fn set_sender(&self, rtp_sender: Option<Arc<dyn RtpSender>>) -> Result<()> {
+        let pc = self.peer_connection()?;
+        let rtp_sender = match rtp_sender {
+            Some(rtp_sender) => {
+                let params = rtp_sender.get_parameters().await?;
+                Some((rtp_sender, params))
+            }
+            None => None,
         };
+
         let mut sender = self.sender.lock().await;
 
-        if let Some(rtp_sender) = sender.take() {
-            let track_id = rtp_sender.track().track_id().await;
+        if let Some(old_sender) = sender.take() {
+            let track_id = old_sender.track().track_id().await;
             pc.track_local_events_tx.lock().await.remove(&track_id);
-            rtp_sender.track().unbind().await;
+            old_sender.track().unbind().await;
         }
 
-        if let Some(rtp_sender) = rtp_sender
-            && let Ok(params) = rtp_sender.get_parameters().await
-        {
+        if let Some((rtp_sender, params)) = rtp_sender {
             // Wire an event channel so RTCP feedback the remote sends about this track
             // (Receiver Reports, PLI/FIR) can be read via `TrackLocal::poll`. The driver
             // routes inbound RTCP tagged with this track id to `evt_tx`.
@@ -273,6 +284,8 @@ impl RtpTransceiverImpl {
                 .await;
             *sender = Some(rtp_sender);
         }
+
+        Ok(())
     }
 
     pub(crate) async fn set_receiver(&self, rtp_receiver: Option<Arc<dyn RtpReceiver>>) {
@@ -377,5 +390,192 @@ impl RtpTransceiver for RtpTransceiverImpl {
             .rtp_transceiver(self.id)
             .ok_or(Error::ErrRTPTransceiverNotExisted)?
             .set_codec_preferences(codecs)
+    }
+}
+
+// A built-in provider is required: `new_test_peer_connection` builds a real core.
+#[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
+mod tests {
+    use super::*;
+    use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+    use crate::peer_connection::new_test_peer_connection;
+    use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
+    use crate::runtime::default_runtime;
+    use rtc::media_stream::MediaStreamTrack;
+    use rtc::peer_connection::RTCPeerConnectionBuilder;
+    use rtc::peer_connection::configuration::media_engine::MediaEngine;
+    use rtc::rtp_transceiver::rtp_sender::{
+        RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters,
+    };
+
+    /// A sender whose `get_parameters` fails, as a sender unknown to the core does. `set_sender`
+    /// reads only its track and parameters.
+    struct FailingSender {
+        track: Arc<dyn TrackLocal>,
+    }
+
+    impl crate::sealed::Sealed for FailingSender {}
+
+    #[async_trait::async_trait]
+    impl RtpSender for FailingSender {
+        fn id(&self) -> RTCRtpSenderId {
+            unreachable!("not used by set_sender")
+        }
+        fn track(&self) -> &Arc<dyn TrackLocal> {
+            &self.track
+        }
+        async fn get_capabilities(&self, _: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {
+            unreachable!("not used by set_sender")
+        }
+        async fn set_parameters(
+            &self,
+            _: RTCRtpSendParameters,
+            _: Option<RTCSetParameterOptions>,
+        ) -> Result<()> {
+            unreachable!("not used by set_sender")
+        }
+        async fn get_parameters(&self) -> Result<RTCRtpSendParameters> {
+            Err(Error::ErrRTPSenderNotExisted)
+        }
+        async fn replace_track(&self, _: Arc<dyn TrackLocal>) -> Result<()> {
+            unreachable!("not used by set_sender")
+        }
+        async fn set_streams(&self, _: Vec<MediaStreamId>) -> Result<()> {
+            unreachable!("not used by set_sender")
+        }
+        async fn get_stats(&self, _: Instant) -> Result<RTCStatsReport> {
+            unreachable!("not used by set_sender")
+        }
+        async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>> {
+            unreachable!("not used by set_sender")
+        }
+    }
+
+    /// A transceiver with a sender the core knows. The test core has no codecs, so it is rebuilt
+    /// with the defaults and given a VP8 track, as `PeerConnectionImpl::add_track` would.
+    async fn core_transceiver(
+        inner: &Arc<PeerConnectionRef>,
+    ) -> (RTCRtpTransceiverId, MediaStreamTrack) {
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("register default codecs");
+        let mut core = inner.core.lock().await;
+        *core = RTCPeerConnectionBuilder::new()
+            .with_media_engine(media_engine)
+            .build(Instant::now())
+            .expect("build a core with codecs");
+
+        let track = MediaStreamTrack::new(
+            "stream".to_owned(),
+            "current".to_owned(),
+            "current".to_owned(),
+            RtpCodecKind::Video,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(1234),
+                    ..Default::default()
+                },
+                codec: RTCRtpCodec {
+                    mime_type: "video/VP8".to_owned(),
+                    clock_rate: 90000,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+        );
+        let id: RTCRtpTransceiverId = core
+            .add_track(track.clone())
+            .expect("add a video track to the core")
+            .into();
+        (id, track)
+    }
+
+    fn same_sender(a: &Arc<dyn RtpSender>, b: &Arc<dyn RtpSender>) -> bool {
+        std::ptr::addr_eq(Arc::as_ptr(a), Arc::as_ptr(b))
+    }
+
+    // Replacing a sender used to unbind the current one before asking the new one for its
+    // parameters, and then dropped the new one silently when that failed: the transceiver was
+    // left with no sender, its track's RTCP channel removed, while the caller saw success.
+    #[test]
+    fn a_failing_new_sender_leaves_the_current_one_in_place() {
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.block_on(Box::pin(async {
+            let (inner, _driver_event_rx) = new_test_peer_connection().await;
+            let (id, track) = core_transceiver(&inner).await;
+            let transceiver = RtpTransceiverImpl::new(id, Arc::clone(&inner));
+
+            let current: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
+                id.into(),
+                Arc::clone(&inner),
+                Arc::new(TrackLocalStaticRTP::new(track)),
+            ));
+            transceiver
+                .set_sender(Some(Arc::clone(&current)))
+                .await
+                .expect("attach a sender the core knows");
+            let current_track_id = current.track().track_id().await;
+
+            let failing: Arc<dyn RtpSender> = Arc::new(FailingSender {
+                track: Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+                    "stream".to_owned(),
+                    "failing".to_owned(),
+                    "failing".to_owned(),
+                    RtpCodecKind::Video,
+                    vec![],
+                ))),
+            });
+            let err = transceiver
+                .set_sender(Some(failing))
+                .await
+                .expect_err("a sender whose parameters cannot be read must be reported");
+            assert!(
+                matches!(err, Error::ErrRTPSenderNotExisted),
+                "unexpected error: {err:?}"
+            );
+
+            let kept = transceiver
+                .sender
+                .lock()
+                .await
+                .clone()
+                .expect("the transceiver must keep its current sender");
+            assert!(
+                same_sender(&kept, &current),
+                "the current sender was replaced"
+            );
+            assert!(
+                inner
+                    .track_local_events_tx
+                    .lock()
+                    .await
+                    .contains_key(&current_track_id),
+                "the current track's RTCP feedback channel must stay wired"
+            );
+        }));
+    }
+
+    // The back-reference is `Weak` (webrtc#906): once the connection is gone, attaching or
+    // detaching a sender is an error rather than a silent no-op.
+    #[test]
+    fn set_sender_reports_a_connection_that_is_gone() {
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.block_on(Box::pin(async {
+            let (inner, driver_event_rx) = new_test_peer_connection().await;
+            let (id, _) = core_transceiver(&inner).await;
+            let transceiver = RtpTransceiverImpl::new(id, Arc::clone(&inner));
+            drop(driver_event_rx);
+            drop(inner);
+
+            let err = transceiver
+                .set_sender(None)
+                .await
+                .expect_err("the connection is gone");
+            assert!(
+                matches!(err, Error::ErrConnectionClosed),
+                "unexpected error: {err:?}"
+            );
+        }));
     }
 }

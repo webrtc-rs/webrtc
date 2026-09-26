@@ -1391,7 +1391,9 @@ impl PeerConnection for PeerConnectionImpl {
             Arc::clone(&self.inner),
             track,
         ));
-        rtp_transceiver.set_sender(Some(Arc::clone(&sender))).await;
+        rtp_transceiver
+            .set_sender(Some(Arc::clone(&sender)))
+            .await?;
 
         Ok(sender)
     }
@@ -1407,7 +1409,7 @@ impl PeerConnection for PeerConnectionImpl {
         let rtp_transceiver = rtp_transceivers
             .get(&sender.id().into())
             .ok_or(Error::ErrRTPTransceiverNotExisted)?;
-        rtp_transceiver.set_sender(None).await;
+        rtp_transceiver.set_sender(None).await?;
 
         Ok(())
     }
@@ -1437,7 +1439,7 @@ impl PeerConnection for PeerConnectionImpl {
             Arc::clone(&self.inner),
             track,
         ));
-        rtp_transceiver.set_sender(Some(sender)).await;
+        rtp_transceiver.set_sender(Some(sender)).await?;
 
         Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
     }
@@ -1473,7 +1475,7 @@ impl PeerConnection for PeerConnectionImpl {
                 Arc::clone(&self.inner),
                 Arc::new(TrackLocalStaticRTP::new(track)),
             ));
-            rtp_transceiver.set_sender(Some(sender)).await;
+            rtp_transceiver.set_sender(Some(sender)).await?;
         }
 
         Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
