@@ -239,6 +239,48 @@ impl RTCStunGatherer {
         Ok(())
     }
 
+    /// The server-reflexive candidate a Binding response reports, or `None` if the response
+    /// cannot yield one. Either way the transaction is over.
+    fn server_reflexive_candidate(
+        msg: &StunMessage,
+        four_tuple: FourTuple,
+    ) -> Option<RTCIceCandidateInit> {
+        let mut xor_addr = XorMappedAddress::default();
+        if let Err(err) = xor_addr.get_from(msg) {
+            warn!(
+                "STUN response from {} to {} has no usable XOR-MAPPED-ADDRESS: {}",
+                four_tuple.peer_addr, four_tuple.local_addr, err
+            );
+            return None;
+        }
+        let config = CandidateServerReflexiveConfig {
+            base_config: CandidateConfig {
+                network: "udp".to_owned(),
+                address: xor_addr.ip.to_string(),
+                port: xor_addr.port,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: four_tuple.local_addr.ip().to_string(),
+            rel_port: four_tuple.local_addr.port(),
+            ..Default::default()
+        };
+        let candidate = match config.new_candidate_server_reflexive() {
+            Ok(candidate) => candidate,
+            Err(err) => {
+                error!("Failed to new_candidate_server_reflexive: {}", err);
+                return None;
+            }
+        };
+        match RTCIceCandidate::from(&candidate).to_json() {
+            Ok(candidate_init) => Some(candidate_init),
+            Err(err) => {
+                error!("Failed to RTCIceCandidate to json: {}", err);
+                None
+            }
+        }
+    }
+
     /// Gather a single srflx candidate, skipping servers without a matching address family.
     fn gather_from_stun_server(
         runtime: &dyn Runtime,
@@ -335,59 +377,52 @@ impl Protocol<TaggedBytesMut, (), RTCStunGatherEventIn> for RTCStunGatherer {
     }
 
     fn poll_event(&mut self) -> Option<Self::Eout> {
-        let mut four_tuples = HashSet::new();
+        // Each client sends a single Binding request, so any event ends it: a response, usable
+        // or not, a timeout, or a stop. Every such client is retired below, which is what lets
+        // gathering complete. Retiring only the ones that produced a candidate left a client
+        // whose server never answered in the map for good, so `StunGatheringComplete` never
+        // fired and ICE gathering never finished (webrtc#904).
+        let mut finished = HashSet::new();
         for stun_client in self.stun_clients.values_mut() {
+            let four_tuple = FourTuple {
+                local_addr: stun_client.local_addr(),
+                peer_addr: stun_client.peer_addr(),
+            };
             while let Some(event) = stun_client.poll_event() {
+                finished.insert(four_tuple);
                 match event {
                     StunEvent::Message(msg) => {
-                        let mut xor_addr = XorMappedAddress::default();
-                        if let Err(err) = xor_addr.get_from(&msg) {
-                            error!("Failed to get xor mapped message: {}", err);
-                            continue;
+                        if let Some(candidate_init) =
+                            RTCStunGatherer::server_reflexive_candidate(&msg, four_tuple)
+                        {
+                            self.events
+                                .push_back(RTCStunGatherEventOut::LocalIceCandidate(
+                                    candidate_init,
+                                ));
                         }
-                        let config = CandidateServerReflexiveConfig {
-                            base_config: CandidateConfig {
-                                network: "udp".to_owned(),
-                                address: xor_addr.ip.to_string(),
-                                port: xor_addr.port,
-                                component: 1,
-                                ..Default::default()
-                            },
-                            rel_addr: stun_client.local_addr().ip().to_string(),
-                            rel_port: stun_client.local_addr().port(),
-                            ..Default::default()
-                        };
-                        let candidate = match config.new_candidate_server_reflexive() {
-                            Ok(candidate) => candidate,
-                            Err(err) => {
-                                error!("Failed to new_candidate_server_reflexive: {}", err);
-                                continue;
-                            }
-                        };
-
-                        let candidate_init = match RTCIceCandidate::from(&candidate).to_json() {
-                            Ok(candidate_init) => candidate_init,
-                            Err(err) => {
-                                error!("Failed to RTCIceCandidate to json: {}", err);
-                                continue;
-                            }
-                        };
-
-                        four_tuples.insert(FourTuple {
-                            local_addr: stun_client.local_addr(),
-                            peer_addr: stun_client.peer_addr(),
-                        });
-                        self.events
-                            .push_back(RTCStunGatherEventOut::LocalIceCandidate(candidate_init));
                     }
-                    _ => {
-                        error!("STUN error: {:?}", event);
+                    // Expected whenever a local address cannot reach a server (a VPN or
+                    // cellular interface, say), so not an error: that address simply gets no
+                    // server-reflexive candidate.
+                    StunEvent::TransactionTimeOut => {
+                        warn!(
+                            "STUN binding request from {} to {} timed out; no server-reflexive \
+                             candidate for that local address",
+                            four_tuple.local_addr, four_tuple.peer_addr
+                        );
+                    }
+                    // Stopped or closed by this side, during teardown or reconfiguration.
+                    event => {
+                        debug!(
+                            "STUN binding request from {} to {} ended without a response: {:?}",
+                            four_tuple.local_addr, four_tuple.peer_addr, event
+                        );
                     }
                 }
             }
         }
 
-        for four_tuple in four_tuples {
+        for four_tuple in finished {
             if let Some(mut stun_client) = self.stun_clients.remove(&four_tuple) {
                 let _ = stun_client.close();
 
@@ -431,6 +466,7 @@ impl Protocol<TaggedBytesMut, (), RTCStunGatherEventIn> for RTCStunGatherer {
 mod tests {
     use super::*;
     use crate::runtime::MockRuntime;
+    use std::time::Duration;
 
     #[test]
     fn stun_clients_require_a_matching_address_family() {
@@ -622,5 +658,199 @@ mod tests {
         );
         futures::executor::block_on(gatherer.gather()).unwrap();
         assert_eq!(1, gatherer.stun_clients.len());
+    }
+
+    /// What a test sees from the gatherer, candidates reduced to their type.
+    #[derive(Debug, PartialEq)]
+    enum Seen {
+        Host,
+        ServerReflexive,
+        Complete,
+    }
+
+    fn drain_events(gatherer: &mut RTCStunGatherer) -> Vec<Seen> {
+        let mut seen = vec![];
+        while let Some(event) = gatherer.poll_event() {
+            seen.push(match event {
+                RTCStunGatherEventOut::LocalIceCandidate(init)
+                    if init.candidate.contains("srflx") =>
+                {
+                    Seen::ServerReflexive
+                }
+                RTCStunGatherEventOut::LocalIceCandidate(_) => Seen::Host,
+                RTCStunGatherEventOut::StunGatheringComplete => Seen::Complete,
+            });
+        }
+        seen
+    }
+
+    /// Answers the Binding request in `request`, adding XOR-MAPPED-ADDRESS when given one.
+    fn binding_response(
+        request: &TaggedBytesMut,
+        mapped: Option<SocketAddr>,
+        now: Instant,
+    ) -> TaggedBytesMut {
+        let mut req = StunMessage::new();
+        req.raw = request.message.to_vec();
+        req.decode().expect("decode Binding request");
+
+        let mut resp = StunMessage::new();
+        let mut setters: Vec<Box<dyn rtc::stun::message::Setter>> = vec![
+            Box::new(req.transaction_id),
+            Box::new(rtc::stun::message::BINDING_SUCCESS),
+        ];
+        if let Some(mapped) = mapped {
+            setters.push(Box::new(XorMappedAddress {
+                ip: mapped.ip(),
+                port: mapped.port(),
+            }));
+        }
+        resp.build(&setters).expect("build Binding response");
+
+        TaggedBytesMut {
+            now,
+            transport: rtc::shared::TransportContext {
+                local_addr: request.transport.local_addr,
+                peer_addr: request.transport.peer_addr,
+                transport_protocol: TransportProtocol::UDP,
+                ecn: None,
+            },
+            message: bytes::BytesMut::from(&resp.raw[..]),
+        }
+    }
+
+    /// Runs the gatherer for `duration` of virtual time the way the driver's loop does: flush
+    /// writes, poll events, advance to the next tick and fire timers. Polling events every tick
+    /// matters: the STUN client retransmits from inside `poll_event`, so without it a request
+    /// never gets past its first attempt. Returns the events seen, and the number of Binding
+    /// requests sent.
+    fn run_timers(
+        gatherer: &mut RTCStunGatherer,
+        runtime: &MockRuntime,
+        duration: Duration,
+    ) -> (Vec<Seen>, usize) {
+        let step = Duration::from_millis(100);
+        let mut elapsed = Duration::ZERO;
+        let mut seen = vec![];
+        let mut sent = 0;
+        while elapsed < duration {
+            while gatherer.poll_write().is_some() {
+                sent += 1;
+            }
+            seen.extend(drain_events(gatherer));
+            runtime.clock().advance(step);
+            gatherer
+                .handle_timeout(runtime.clock().now())
+                .expect("handle_timeout");
+            elapsed += step;
+        }
+        seen.extend(drain_events(gatherer));
+        (seen, sent)
+    }
+
+    /// Far longer than a STUN transaction can last with all its retransmissions.
+    const PAST_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(120);
+
+    // webrtc#904: a server that never answers used to leave its client in the map for good.
+    // Gathering stayed `Gathering`, `StunGatheringComplete` never fired and ICE gathering never
+    // finished. A timed-out Binding request must end the client like any other outcome.
+    #[test]
+    fn an_unanswered_server_still_completes_gathering() {
+        let runtime = Arc::new(MockRuntime::new());
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:192.0.2.2:3478".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            runtime.clone(),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(drain_events(&mut gatherer), vec![Seen::Host]);
+
+        let (seen, sent) = run_timers(&mut gatherer, &runtime, PAST_TRANSACTION_TIMEOUT);
+
+        assert!(sent > 1, "the request is retransmitted before it times out");
+        assert_eq!(seen, vec![Seen::Complete]);
+        assert_eq!(gatherer.state(), RTCIceGatheringState::Complete);
+        assert!(gatherer.stun_clients.is_empty());
+        assert!(gatherer.poll_timeout().is_none());
+    }
+
+    // The case in the report: one local address reaches the server and one does not. The
+    // answered one yields its candidate at once; gathering completes once the other times out.
+    #[test]
+    fn gathering_completes_when_only_some_local_addresses_get_an_answer() {
+        let runtime = Arc::new(MockRuntime::new());
+        let reachable: SocketAddr = "192.0.2.1:5000".parse().unwrap();
+        let mut gatherer = RTCStunGatherer::new(
+            vec![reachable, "198.51.100.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:192.0.2.2:3478".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            runtime.clone(),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(drain_events(&mut gatherer), vec![Seen::Host, Seen::Host]);
+
+        let mut requests = vec![];
+        while let Some(request) = gatherer.poll_write() {
+            requests.push(request);
+        }
+        let request = requests
+            .iter()
+            .find(|request| request.transport.local_addr == reachable)
+            .expect("a Binding request from the reachable address");
+        let mapped: SocketAddr = "203.0.113.7:40000".parse().unwrap();
+        gatherer
+            .handle_read(binding_response(
+                request,
+                Some(mapped),
+                runtime.clock().now(),
+            ))
+            .expect("handle_read");
+
+        assert_eq!(drain_events(&mut gatherer), vec![Seen::ServerReflexive]);
+        assert_eq!(
+            gatherer.state(),
+            RTCIceGatheringState::Gathering,
+            "still waiting on the unanswered address"
+        );
+
+        let (seen, _) = run_timers(&mut gatherer, &runtime, PAST_TRANSACTION_TIMEOUT);
+
+        assert_eq!(seen, vec![Seen::Complete]);
+        assert_eq!(gatherer.state(), RTCIceGatheringState::Complete);
+        assert!(gatherer.stun_clients.is_empty());
+    }
+
+    // A response the gatherer cannot use still ends the transaction; it used to `continue`
+    // past it and leave the client stuck just like an unanswered one.
+    #[test]
+    fn a_response_without_a_mapped_address_still_completes_gathering() {
+        let runtime = Arc::new(MockRuntime::new());
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:192.0.2.2:3478".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            runtime.clone(),
+        );
+        futures::executor::block_on(gatherer.gather()).unwrap();
+        assert_eq!(drain_events(&mut gatherer), vec![Seen::Host]);
+
+        let request = gatherer.poll_write().expect("Binding request");
+        gatherer
+            .handle_read(binding_response(&request, None, runtime.clock().now()))
+            .expect("handle_read");
+
+        assert_eq!(drain_events(&mut gatherer), vec![Seen::Complete]);
+        assert_eq!(gatherer.state(), RTCIceGatheringState::Complete);
+        assert!(gatherer.stun_clients.is_empty());
     }
 }
