@@ -44,8 +44,10 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
 use std::io::IoSliceMut;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -133,6 +135,67 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day 
 /// newest packet's arrival — spins exactly as hard while never repeating a value. Rate-limiting
 /// by elapsed time catches every shape.
 const MIN_IMMEDIATE_TIMEOUT_INTERVAL: Duration = Duration::from_millis(1);
+
+thread_local! {
+    /// The connection whose driver task this thread is polling at this moment, or `0`.
+    static POLLING_DRIVER: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Identifies a connection for [`POLLING_DRIVER`].
+fn driver_id(inner: &Arc<PeerConnectionRef>) -> usize {
+    Arc::as_ptr(inner) as usize
+}
+
+/// Whether the caller is running inside `inner`'s own driver task.
+///
+/// Application callbacks are awaited on the driver task, so this is true for a `close()`
+/// called from one of them. Waiting there for the driver to finish can never succeed (it cannot
+/// make progress until the callback returns), and aborting it would cut off the TURN releases it
+/// sends on its way out.
+pub(crate) fn is_polling_driver(inner: &Arc<PeerConnectionRef>) -> bool {
+    POLLING_DRIVER.with(|polling| polling.get()) == driver_id(inner)
+}
+
+/// Runs a connection's driver future, recording on the polling thread for the duration of every
+/// poll which connection it belongs to, so [`is_polling_driver`] can answer from inside it.
+///
+/// Recorded per poll rather than per task because a multi-threaded runtime may poll the task on a
+/// different thread each time; everything the driver awaits, callbacks included, runs within one
+/// of those polls.
+pub(crate) struct DriverTask {
+    id: usize,
+    future: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl DriverTask {
+    pub(crate) fn new(
+        inner: &Arc<PeerConnectionRef>,
+        future: impl Future<Output = ()> + Send + 'static,
+    ) -> Self {
+        Self {
+            id: driver_id(inner),
+            future: Box::pin(future),
+        }
+    }
+}
+
+impl Future for DriverTask {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        /// Restores the previous marker even if the poll panics.
+        struct Restore(usize);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                POLLING_DRIVER.with(|polling| polling.set(self.0));
+            }
+        }
+
+        let this = self.get_mut();
+        let _restore = Restore(POLLING_DRIVER.with(|polling| polling.replace(this.id)));
+        this.future.as_mut().poll(cx)
+    }
+}
 
 /// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
 pub(crate) fn insert_data_channel_event_sender(
@@ -563,6 +626,15 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
+        // Release TURN allocations while the old UDP sockets still exist. Rebinding drops them
+        // below, and a Refresh(0) sent from a new socket would not match the allocation's
+        // 5-tuple, leaving it on the server until it expires. The initial bind has no previous
+        // generation to release.
+        if !self.udp_sockets.is_empty() {
+            self.turn_relayer.close()?;
+            self.poll_writes().await?;
+        }
+
         // Drop before binding — see above. Also drops every accepted TCP stream, which is
         // correct: they belong to the generation being replaced.
         self.udp_sockets.clear();
@@ -766,9 +838,7 @@ where
             // momentarily full channel), this check still guarantees the loop —
             // and thus a dedicated reactor thread — terminates instead of leaking.
             if self.inner.closing.load(Ordering::Acquire) {
-                if let Err(err) = self.turn_relayer.close() {
-                    error!("Failed to close turn_relayer: {}", err);
-                }
+                self.release_turn_allocations().await;
                 return Ok(());
             }
 
@@ -1678,9 +1748,7 @@ where
                 self.tcp_transport.register_stream(four_tuple, stream);
             }
             PeerConnectionDriverEvent::Close => {
-                if let Err(err) = self.turn_relayer.close() {
-                    error!("Failed to close turn_relayer: {}", err);
-                }
+                self.release_turn_allocations().await;
                 return true;
             }
         }
@@ -1835,6 +1903,18 @@ where
             messages.push(message);
         }
         messages
+    }
+
+    /// Releases every TURN allocation (Refresh with LIFETIME=0) and sends the releases before
+    /// the driver stops, so the server frees them now rather than when their lifetime expires
+    /// (webrtc#903). The sockets are about to go, so this is the last chance to send them.
+    async fn release_turn_allocations(&mut self) {
+        if let Err(err) = self.turn_relayer.close() {
+            error!("Failed to close turn_relayer: {}", err);
+        }
+        if let Err(err) = self.poll_writes().await {
+            error!("Failed to send TURN allocation releases: {}", err);
+        }
     }
 
     async fn poll_writes(&mut self) -> Result<()> {

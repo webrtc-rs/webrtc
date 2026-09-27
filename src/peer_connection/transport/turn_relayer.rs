@@ -69,6 +69,10 @@ pub(crate) struct RTCTurnRelayer {
     pending_permissions: HashMap<rtc::stun::message::TransactionId, PendingPermission>,
     pending_permission_pairs: HashMap<(SocketAddr, SocketAddr), rtc::stun::message::TransactionId>,
     pending_packets: HashMap<(SocketAddr, SocketAddr), VecDeque<TaggedBytesMut>>,
+    /// Refresh(LIFETIME=0) requests queued while retiring a TURN client. They must survive a
+    /// configuration reset (which clears `wouts`) and go out on the socket that owns the
+    /// allocation, so they are kept apart and sent first.
+    retirement_wouts: VecDeque<TaggedBytesMut>,
     wouts: VecDeque<TaggedBytesMut>,
     routs: VecDeque<TaggedBytesMut>,
     events: VecDeque<RTCTurnRelayEventOut>,
@@ -96,6 +100,7 @@ impl RTCTurnRelayer {
             pending_permissions: HashMap::new(),
             pending_permission_pairs: HashMap::new(),
             pending_packets: HashMap::new(),
+            retirement_wouts: VecDeque::new(),
             wouts: VecDeque::new(),
             routs: VecDeque::new(),
             events: VecDeque::new(),
@@ -131,7 +136,7 @@ impl RTCTurnRelayer {
 
         let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
         for key in keys {
-            self.remove_client(key);
+            self.remove_client(key, true);
         }
         self.relay_addrs.clear();
         self.pending_permissions.clear();
@@ -507,8 +512,24 @@ impl RTCTurnRelayer {
         }
     }
 
-    fn remove_client(&mut self, four_tuple: FourTuple) {
+    /// Drops a TURN client. With `release_allocation`, a live allocation is released first
+    /// (RFC 8656 §7: a Refresh with LIFETIME 0) instead of being left on the server until its
+    /// lifetime expires.
+    fn remove_client(&mut self, four_tuple: FourTuple, release_allocation: bool) {
         if let Some(mut managed_client) = self.clients.remove(&four_tuple) {
+            // `Client::close` only clears transaction state; the release is `Relay::close`,
+            // which queues an authenticated Refresh(LIFETIME=0). Clear the old transactions
+            // first, then create and drain the release so the driver sends it on the socket
+            // that owns the allocation.
+            let _ = managed_client.client.close();
+            if release_allocation && let Some(relay_addr) = managed_client.relay_addr {
+                if let Ok(mut relay) = managed_client.client.relay(relay_addr) {
+                    let _ = relay.close(self.runtime.now());
+                }
+                while let Some(msg) = managed_client.client.poll_write() {
+                    self.retirement_wouts.push_back(msg);
+                }
+            }
             if let Some(relay_addr) = managed_client.relay_addr.take() {
                 self.relay_addrs.remove(&relay_addr);
                 self.pending_packets
@@ -518,7 +539,6 @@ impl RTCTurnRelayer {
                 self.pending_permission_pairs
                     .retain(|(addr, _), _| *addr != relay_addr);
             }
-            let _ = managed_client.client.close();
         }
     }
 
@@ -645,6 +665,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     }
 
     fn poll_write(&mut self) -> Option<Self::Wout> {
+        if let Some(msg) = self.retirement_wouts.pop_front() {
+            return Some(msg);
+        }
         for managed_client in self.clients.values_mut() {
             while let Some(msg) = managed_client.client.poll_write() {
                 self.wouts.push_back(msg);
@@ -656,7 +679,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     fn handle_event(&mut self, evt: RTCTurnRelayEventIn) -> Result<()> {
         match evt {
             RTCTurnRelayEventIn::SocketWriteFailure(four_tuple) => {
-                self.remove_client(four_tuple);
+                // The socket is already unusable, so a Refresh(0) could not be delivered; the
+                // server reclaims this allocation when its lifetime expires.
+                self.remove_client(four_tuple, false);
                 self.maybe_emit_gathering_complete();
             }
         }
@@ -795,7 +820,7 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     fn close(&mut self) -> Result<()> {
         let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
         for key in keys {
-            self.remove_client(key);
+            self.remove_client(key, true);
         }
         Ok(())
     }
