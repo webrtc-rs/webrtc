@@ -45,8 +45,10 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::future::Future;
 use std::io::IoSliceMut;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -82,6 +84,67 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day 
 /// newest packet's arrival — spins exactly as hard while never repeating a value. Rate-limiting
 /// by elapsed time catches every shape.
 const MIN_IMMEDIATE_TIMEOUT_INTERVAL: Duration = Duration::from_millis(1);
+
+thread_local! {
+    /// The connection whose driver task this thread is polling at this moment, or `0`.
+    static POLLING_DRIVER: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Identifies a connection for [`POLLING_DRIVER`].
+fn driver_id<I: Interceptor>(inner: &Arc<PeerConnectionRef<I>>) -> usize {
+    Arc::as_ptr(inner) as *const () as usize
+}
+
+/// Whether the caller is running inside `inner`'s own driver task.
+///
+/// Application callbacks are awaited on the driver task, so this is true for a `close()`
+/// called from one of them. Waiting there for the driver to finish can never succeed (it cannot
+/// make progress until the callback returns), and aborting it would cut off the TURN releases it
+/// sends on its way out.
+pub(crate) fn is_polling_driver<I: Interceptor>(inner: &Arc<PeerConnectionRef<I>>) -> bool {
+    POLLING_DRIVER.with(|polling| polling.get()) == driver_id(inner)
+}
+
+/// Runs a connection's driver future, recording on the polling thread for the duration of every
+/// poll which connection it belongs to, so [`is_polling_driver`] can answer from inside it.
+///
+/// Recorded per poll rather than per task because a multi-threaded runtime may poll the task on a
+/// different thread each time; everything the driver awaits, callbacks included, runs within one
+/// of those polls.
+pub(crate) struct DriverTask {
+    id: usize,
+    future: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl DriverTask {
+    pub(crate) fn new<I: Interceptor>(
+        inner: &Arc<PeerConnectionRef<I>>,
+        future: impl Future<Output = ()> + Send + 'static,
+    ) -> Self {
+        Self {
+            id: driver_id(inner),
+            future: Box::pin(future),
+        }
+    }
+}
+
+impl Future for DriverTask {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        /// Restores the previous marker even if the poll panics.
+        struct Restore(usize);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                POLLING_DRIVER.with(|polling| polling.set(self.0));
+            }
+        }
+
+        let this = self.get_mut();
+        let _restore = Restore(POLLING_DRIVER.with(|polling| polling.replace(this.id)));
+        this.future.as_mut().poll(cx)
+    }
+}
 
 /// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
 pub(crate) fn insert_data_channel_event_sender(

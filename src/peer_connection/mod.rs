@@ -56,7 +56,7 @@ use log::error;
 use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
@@ -66,8 +66,8 @@ use crate::runtime::{Mutex, Sender, channel};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use driver::{
-    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
-    PeerConnectionDriver,
+    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, DriverTask, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
+    PeerConnectionDriver, is_polling_driver,
 };
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
@@ -505,6 +505,13 @@ where
 #[async_trait::async_trait]
 pub trait PeerConnection: Send + Sync + 'static {
     /// Close the peer connection
+    ///
+    /// TURN allocations are released on a best-effort basis: a Refresh with LIFETIME 0 is sent
+    /// for each one before this returns, so the server frees them now rather than when their
+    /// lifetime expires. `close()` waits at most about 100 ms for that; if the connection's
+    /// driver cannot send them in time, it is stopped anyway and the allocations expire on the
+    /// server. Called from an event-handler callback, which runs on the driver itself, it returns
+    /// without waiting and the releases are sent as soon as the callback returns.
     async fn close(&self) -> Result<()>;
     /// Create an SDP offer
     async fn create_offer(&self, options: Option<RTCOfferOptions>)
@@ -572,6 +579,14 @@ pub trait PeerConnection: Send + Sync + 'static {
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport;
 }
 
+/// How long `close()` waits for the driver to finish its exit path before aborting it.
+///
+/// The exit path is local work: queue the TURN releases and hand them to the socket, with no
+/// round trip, so it normally completes in a few milliseconds. This only caps the case of a driver
+/// that cannot get there promptly — one blocked in an application callback, say — where releasing
+/// the allocations is best effort and `close()` must not be held up for it.
+const DRIVER_STOP_TIMEOUT: Duration = Duration::from_millis(100);
+
 /// Concrete async peer connection implementation (generic over interceptor type).
 ///
 /// Not exposed directly — obtained as an opaque `impl PeerConnection` from
@@ -582,12 +597,14 @@ where
 {
     inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Mutex<Option<Box<dyn JoinHandle>>>,
+    /// Ends (`recv` returns `None`) once the driver future is gone, whether it ran to completion
+    /// or was aborted: its sender lives in that future. `close()` waits on it.
+    driver_stopped: Mutex<Option<crate::runtime::Receiver<()>>>,
     /// Whether the driver runs on the shared bounded reactor pool (a task pinned to
-    /// one pool thread) rather than the general async runtime. When true, `close()`
-    /// waits for that task to finish and then aborts it, and `Drop` signals it to
-    /// stop (via [`PeerConnectionRef::closing`]) so a driver task is not left
-    /// running on a pool thread if the connection is dropped without an explicit
-    /// `close()`.
+    /// one pool thread) rather than the general async runtime. When true, `Drop`
+    /// signals it to stop (via [`PeerConnectionRef::closing`]) so a driver task is not
+    /// left running on a pool thread if the connection is dropped without an explicit
+    /// `close()`. (`close()` itself treats both runtimes alike.)
     dedicated_reactor: bool,
 }
 
@@ -836,6 +853,7 @@ where
                 ice_restart_rebind_pending: AtomicBool::new(false),
             }),
             driver_handle: Mutex::new(None),
+            driver_stopped: Mutex::new(None),
             dedicated_reactor,
         };
 
@@ -852,7 +870,10 @@ where
         // future, build the driver, report the init outcome, then run the event
         // loop to completion.
         let inner = peer_connection.inner.clone();
+        let (driver_stopped_tx, driver_stopped_rx) = channel::<()>(1);
         let run_driver = async move {
+            // Dropped with this future, which is what `close()` waits for.
+            let _driver_stopped = driver_stopped_tx;
             let mut driver = PeerConnectionDriver::new(
                 inner,
                 udp_addrs,
@@ -873,12 +894,14 @@ where
             driver.signal_stopped();
         };
 
+        let run_driver = DriverTask::new(&peer_connection.inner, run_driver);
         let driver_handle = if dedicated_reactor {
             runtime.spawn_reactor(reactor_pool_size, Box::pin(run_driver))
         } else {
             runtime.spawn(Box::pin(run_driver))
         };
         *peer_connection.driver_handle.lock().await = Some(driver_handle);
+        *peer_connection.driver_stopped.lock().await = Some(driver_stopped_rx);
 
         // Surface init errors here rather than swallowing them on the driver
         // thread. The driver reports its init outcome exactly once; a closed
@@ -952,30 +975,31 @@ where
             .await;
 
         let driver_handle = self.driver_handle.lock().await.take();
+        let driver_stopped = self.driver_stopped.lock().await.take();
         if let Some(driver_handle) = driver_handle {
-            if self.dedicated_reactor {
-                // The reactor driver is a task pinned to a shared pool thread.
-                // First wait (bounded) for its event loop to return on its own, so
-                // it flushes the SCTP shutdown and releases its socket by the time
-                // `close()` resolves — it exits promptly once it observes the
-                // shutdown signalled above. Then abort the task unconditionally to
-                // free the pool thread of it (a no-op once it has finished; the
-                // fallback that reclaims a driver still wedged at the bound).
-                //
-                // Note: if `close()` is called *from within an event-handler
-                // callback* (which, for a dedicated reactor, runs on this very
-                // task), the loop cannot make progress until the handler returns,
-                // so this wait runs out its full bound before aborting. Handlers
-                // must not block (see `with_dedicated_reactor_thread`).
-                let step = std::time::Duration::from_millis(1);
-                let max = std::time::Duration::from_secs(2);
-                let mut waited = std::time::Duration::ZERO;
-                while !driver_handle.is_finished() && waited < max {
-                    self.inner.runtime.sleep(step).await;
-                    waited += step;
-                }
-                driver_handle.abort();
+            if is_polling_driver(&self.inner) {
+                // Called from an application callback, which runs on the driver task itself.
+                // Waiting for the driver cannot succeed until this callback returns, and aborting
+                // it would cut off the TURN allocation releases it sends on its way out. Neither is
+                // needed: `closing` is set, so the driver releases the allocations and exits on
+                // its own as soon as the callback returns.
+                driver_handle.detach();
             } else {
+                // Give the driver a brief chance to finish its exit path before `close()` returns:
+                // it hands the TURN releases to the socket (webrtc#903) and, on a dedicated
+                // reactor, frees its pool thread. Without this the abort below usually wins the
+                // race and the releases are never sent. The wait is capped at
+                // `DRIVER_STOP_TIMEOUT`: a driver that cannot get there in time is aborted, and
+                // its releases are lost, since they are best effort and `close()` must return
+                // promptly.
+                if let Some(mut driver_stopped) = driver_stopped {
+                    let _ = crate::runtime::timeout(
+                        &*self.inner.runtime,
+                        DRIVER_STOP_TIMEOUT,
+                        driver_stopped.recv(),
+                    )
+                    .await;
+                }
                 driver_handle.abort();
             }
         }
@@ -1455,6 +1479,7 @@ mod tests {
             let pc = PeerConnectionImpl {
                 inner,
                 driver_handle: Mutex::new(None),
+                driver_stopped: Mutex::new(None),
                 dedicated_reactor: false,
             };
 
