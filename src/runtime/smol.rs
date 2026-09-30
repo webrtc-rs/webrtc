@@ -156,11 +156,8 @@ impl Runtime for SmolRuntime {
         remote_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
-            let std_stream = std::net::TcpStream::connect(remote_addr)?;
-            std_stream.set_nonblocking(true)?;
-            let std_stream2 = std_stream.try_clone()?;
-            let read_io = ::smol::Async::new(std_stream)?;
-            let write_io = ::smol::Async::new(std_stream2)?;
+            let read_io = ::smol::Async::<std::net::TcpStream>::connect(remote_addr).await?;
+            let write_io = ::smol::Async::new(read_io.get_ref().try_clone()?)?;
             let local_addr = read_io.get_ref().local_addr()?;
             let peer_addr = read_io.get_ref().peer_addr()?;
             Ok(Arc::new(TcpStream {
@@ -409,5 +406,47 @@ impl AsyncTcpStream for TcpStream {
 
     fn peer_addr(&self) -> io::Result<SocketAddr> {
         Ok(self.peer_addr)
+    }
+}
+
+// Linux only: once a listener's accept queue is full, Linux drops further SYNs, which keeps
+// the next connect pending without leaving the machine. Other kernels may refuse or admit
+// that connection instead, so the fixture only works on Linux.
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// A connect whose handshake is still in flight must yield, not block the executor.
+    #[test]
+    fn connect_tcp_does_not_block_the_executor() {
+        let listener =
+            socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+        listener
+            .bind(&SocketAddr::from(([127, 0, 0, 1], 0)).into())
+            .unwrap();
+        listener.listen(1).unwrap();
+        let addr = listener.local_addr().unwrap().as_socket().unwrap();
+        // Fill the accept queue until a handshake stalls.
+        let mut queued = Vec::new();
+        while let Ok(stream) =
+            std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(200))
+        {
+            queued.push(stream);
+            assert!(queued.len() < 8, "accept queue never filled");
+        }
+
+        // The timer can only win if connect_tcp handed control back while still pending.
+        let dialed = ::smol::block_on(::smol::future::or(
+            async { Some(SmolRuntime.connect_tcp(addr).await.map(|_| ())) },
+            async {
+                ::smol::Timer::after(Duration::from_millis(200)).await;
+                None
+            },
+        ));
+        assert!(
+            dialed.is_none(),
+            "connect_tcp did not stay pending: {dialed:?}"
+        );
     }
 }
