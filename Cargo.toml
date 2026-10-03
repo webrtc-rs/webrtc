@@ -68,6 +68,9 @@ async-executor = "1.14.0"
 async-io = "2.6.0"
 futures-lite = "2.6.1"
 
+# For the smol `connect_tcp` test: a listen backlog, which std cannot set.
+socket2 = "0.6.5"
+
 [[example]]
 name = "custom-runtime"
 path = "examples/custom-runtime/custom-runtime.rs"
