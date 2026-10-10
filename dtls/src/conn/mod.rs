@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use log::*;
 use portable_atomic::{AtomicBool, AtomicU16};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 use util::replay_detector::*;
 use util::Conn;
 
@@ -45,6 +45,25 @@ pub(crate) const INBOUND_BUFFER_SIZE: usize = 8192;
 // Default replay protection window is specified by RFC 6347 Section 4.1.2.6
 pub(crate) const DEFAULT_REPLAY_PROTECTION_WINDOW: usize = 64;
 
+// RFC 6347 section 4.2.4: the side that sends the last flight of a handshake
+// cannot know whether the peer received it. It keeps the flight and sends it
+// again whenever the peer retransmits its previous flight.
+//
+// The peer retransmits at a fixed `flight_interval` (default 1 s, no back-off in
+// this implementation), so the RFC's "at least twice the maximum retransmit
+// timer" is 2 s with the default. 60 s covers intervals up to 30 s and keeps
+// the flight around for a peer that is slow to give up, while bounding how long
+// the packets are retained.
+pub(crate) const FINAL_FLIGHT_RESEND_WINDOW: Duration = Duration::from_secs(60);
+// Never answer retransmissions more often than this, however many arrive.
+const FINAL_FLIGHT_RESEND_MIN_INTERVAL: Duration = Duration::from_millis(100);
+
+/// The last flight this side sent in a handshake, kept for retransmission.
+pub(crate) struct LastFlight {
+    pub(crate) packets: Vec<Packet>,
+    pub(crate) sent_at: Instant,
+}
+
 pub static INVALID_KEYING_LABELS: &[&str] = &[
     "client finished",
     "server finished",
@@ -68,6 +87,8 @@ struct ConnReaderContext {
     handshake_tx: mpsc::Sender<(oneshot::Sender<()>, mpsc::Sender<()>)>,
     handshake_done_rx: mpsc::Receiver<()>,
     packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
+    last_flight: Arc<Mutex<Option<LastFlight>>>,
+    last_final_flight_resend: Option<Instant>,
 }
 
 // Conn represents a DTLS connection
@@ -103,6 +124,8 @@ pub struct DTLSConn {
     pub(crate) packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
     pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
     pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
+    // final flight of the handshake when this side sent it (see FINAL_FLIGHT_RESEND_WINDOW)
+    pub(crate) last_flight: Arc<Mutex<Option<LastFlight>>>,
 
     reader_close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
@@ -322,6 +345,7 @@ impl DTLSConn {
             packet_tx,
             handle_queue_tx,
             handshake_done_tx: Some(handshake_done_tx),
+            last_flight: Arc::new(Mutex::new(None)),
             reader_close_tx: Mutex::new(Some(reader_close_tx)),
         };
 
@@ -358,6 +382,7 @@ impl DTLSConn {
         let local_epoch = Arc::clone(&c.state.local_epoch);
         let remote_epoch = Arc::clone(&c.state.remote_epoch);
         let cipher_suite2 = Arc::clone(&c.state.cipher_suite);
+        let last_flight2 = Arc::clone(&c.last_flight);
 
         tokio::spawn(async move {
             let mut buf = vec![0u8; INBOUND_BUFFER_SIZE];
@@ -374,6 +399,8 @@ impl DTLSConn {
                 handshake_tx,
                 handshake_done_rx,
                 packet_tx: packet_tx2,
+                last_flight: last_flight2,
+                last_final_flight_resend: None,
             };
 
             //trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
@@ -514,6 +541,7 @@ impl DTLSConn {
                 let mut reader_close_tx = self.reader_close_tx.lock().await;
                 reader_close_tx.take();
             }
+            self.last_flight.lock().await.take();
             self.conn.close().await?;
         }
 
@@ -838,6 +866,13 @@ impl DTLSConn {
         }
 
         if has_handshake {
+            if handshake_completed_successfully.load(Ordering::SeqCst) {
+                // The handshaker is done. A handshake record now is the peer
+                // retransmitting its last flight because it did not get ours.
+                DTLSConn::resend_final_flight(ctx).await;
+                return Ok(());
+            }
+
             let (done_tx, mut done_rx) = mpsc::channel(1);
             let rendezvous_at_handshake = async {
                 let (rendezvous_tx, rendezvous_rx) = oneshot::channel();
@@ -870,6 +905,40 @@ impl DTLSConn {
         }
 
         Ok(())
+    }
+
+    /// Sends the final handshake flight again after the peer retransmitted its
+    /// previous flight (RFC 6347 section 4.2.4). Does nothing when this side did
+    /// not send the last flight, when the resend window has passed, or when the
+    /// last resend was less than `FINAL_FLIGHT_RESEND_MIN_INTERVAL` ago.
+    async fn resend_final_flight(ctx: &mut ConnReaderContext) {
+        let now = Instant::now();
+        if let Some(prev) = ctx.last_final_flight_resend {
+            if now.saturating_duration_since(prev) < FINAL_FLIGHT_RESEND_MIN_INTERVAL {
+                return;
+            }
+        }
+
+        let packets = {
+            let mut last_flight = ctx.last_flight.lock().await;
+            match &*last_flight {
+                None => return,
+                Some(lf)
+                    if now.saturating_duration_since(lf.sent_at) > FINAL_FLIGHT_RESEND_WINDOW =>
+                {
+                    *last_flight = None;
+                    return;
+                }
+                Some(lf) => lf.packets.clone(),
+            }
+        };
+
+        trace!(
+            "{}: resending final flight after peer retransmit",
+            srv_cli_str(ctx.is_client)
+        );
+        ctx.last_final_flight_resend = Some(now);
+        let _ = ctx.packet_tx.send((packets, None)).await;
     }
 
     async fn handle_queued_packets(
