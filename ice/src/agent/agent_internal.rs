@@ -569,6 +569,12 @@ impl AgentInternal {
         let network_type = c.network_type();
         {
             let mut local_candidates = self.local_candidates.lock().await;
+            // Gathering runs on its own tasks and can finish after close(). A candidate
+            // stored after delete_all_candidates() is never closed and its socket leaks,
+            // so reject it; the caller closes the candidate, which stops its recv loop.
+            if self.done_tx.lock().await.is_none() {
+                return Err(Error::ErrClosed);
+            }
             if let Some(cands) = local_candidates.get(&network_type) {
                 for cand in cands {
                     if cand.equal(&**c) {
