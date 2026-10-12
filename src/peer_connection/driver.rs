@@ -11,7 +11,8 @@ use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
-use crate::peer_connection::transport::tcp_transport::RTCTcpTransport;
+use crate::peer_connection::transport::tcp_mux::TCPMux;
+use crate::peer_connection::transport::tcp_transport::{self, RTCTcpTransport};
 use crate::peer_connection::transport::udp_mux::UDPMux;
 use crate::peer_connection::transport::{
     MAX_GSO_BATCH_BYTES, MAX_GSO_SEGMENTS, MIN_GSO_RUN, SocketRecvResult, UDP_RECV_BUF_LEN,
@@ -544,6 +545,15 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     /// advertised interface address for the write path, while the receive loop wants exactly
     /// one entry for it.
     mux_conn: Option<Arc<dyn AsyncUdpSocket>>,
+    /// The shared ICE-TCP listener this connection rides on, when it is muxed, and the ufrag
+    /// its streams are dispatched by (the same pinned credentials as `udp_mux`). Mutually
+    /// exclusive with binding `tcp_addrs` per connection; see
+    /// [`tcp_mux`](crate::peer_connection::transport::tcp_mux). Only the passive side is
+    /// muxed — active ICE-TCP connects are outbound dials and need no shared listener.
+    tcp_mux: Option<(Arc<dyn TCPMux>, String)>,
+    /// Whether this connection is registered with `tcp_mux` (its dispatched-stream forwarder
+    /// is running). The registration channel itself is owned by that task.
+    tcp_mux_registered: bool,
     mdns_mode: MulticastDnsMode,
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
@@ -570,6 +580,7 @@ where
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         udp_mux: Option<(Arc<dyn UDPMux>, String)>,
+        tcp_mux: Option<(Arc<dyn TCPMux>, String)>,
         mdns_mode: MulticastDnsMode,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -607,7 +618,9 @@ where
             udp_addrs,
             tcp_addrs,
             udp_mux,
+            tcp_mux,
             mux_conn: None,
+            tcp_mux_registered: false,
             mdns_mode,
             ice_servers,
             ice_gather_policy,
@@ -642,70 +655,121 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
+        // ── UDP: muxed shared socket, or per-connection binds ──
         if let Some((mux, ufrag)) = self.udp_mux.clone() {
-            return self.bind_muxed_transports(&mux, &ufrag);
-        }
+            self.bind_muxed_udp(&mux, &ufrag)?;
+        } else {
+            // Release TURN allocations while the old UDP sockets still exist. Rebinding drops
+            // them below, and a Refresh(0) sent from a new socket would not match the
+            // allocation's 5-tuple, leaving it on the server until it expires. The initial
+            // bind has no previous generation to release.
+            if !self.udp_sockets.is_empty() {
+                self.turn_relayer.close()?;
+                self.poll_writes().await?;
+            }
 
-        // Release TURN allocations while the old UDP sockets still exist. Rebinding drops them
-        // below, and a Refresh(0) sent from a new socket would not match the allocation's
-        // 5-tuple, leaving it on the server until it expires. The initial bind has no previous
-        // generation to release.
-        if !self.udp_sockets.is_empty() {
-            self.turn_relayer.close()?;
-            self.poll_writes().await?;
-        }
+            // Drop before binding — a configured fixed port cannot be reclaimed while its
+            // previous socket still holds it.
+            self.udp_sockets.clear();
+            self.mdns_socket = None;
 
-        // Drop before binding — see above. Also drops every accepted TCP stream, which is
-        // correct: they belong to the generation being replaced.
-        self.udp_sockets.clear();
-        self.mdns_socket = None;
-        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
+            if self.mdns_mode != MulticastDnsMode::Disabled {
+                self.mdns_socket =
+                    Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
+            }
 
-        if self.mdns_mode != MulticastDnsMode::Disabled {
-            self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
-        }
-
-        // Resolve here, not at construction: this runs again on every ICE-restart rebind, which
-        // is what makes the rebind follow a network change (webrtc#874).
-        for bind in resolve_bind_addrs(&self.udp_addrs)? {
-            let socket = match std::net::UdpSocket::bind(bind.addr) {
-                Ok(socket) => socket,
-                Err(err) => {
-                    if bind.enumerated {
-                        warn!("Skipping UDP bind on local address {}: {err}", bind.addr);
-                    } else {
-                        error!("Failed to bind UDP on address {}: {err}", bind.addr);
+            // Resolve here, not at construction: this runs again on every ICE-restart rebind,
+            // which is what makes the rebind follow a network change (webrtc#874).
+            for bind in resolve_bind_addrs(&self.udp_addrs)? {
+                let socket = match std::net::UdpSocket::bind(bind.addr) {
+                    Ok(socket) => socket,
+                    Err(err) => {
+                        if bind.enumerated {
+                            warn!("Skipping UDP bind on local address {}: {err}", bind.addr);
+                        } else {
+                            error!("Failed to bind UDP on address {}: {err}", bind.addr);
+                        }
+                        continue;
                     }
-                    continue;
-                }
-            };
-            socket.set_nonblocking(true)?;
-            let local_addr = socket.local_addr()?;
-            self.udp_sockets
-                .insert(local_addr, runtime.wrap_udp_socket(socket)?);
+                };
+                socket.set_nonblocking(true)?;
+                let local_addr = socket.local_addr()?;
+                self.udp_sockets
+                    .insert(local_addr, runtime.wrap_udp_socket(socket)?);
+            }
         }
 
-        self.bind_tcp_listeners(&runtime)?;
-        if self.udp_sockets.is_empty() && self.tcp_transport.is_empty() {
+        // ── TCP: muxed shared listener, or per-connection binds ──
+        // The previous generation's listeners go first either way, or a rebind could not
+        // reclaim a pinned port. (Drops every accepted stream of the generation too — correct:
+        // they belong to the transport being replaced.)
+        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
+        if let Some((mux, ufrag)) = self.tcp_mux.clone() {
+            // Register once; a rebind keeps the registration — pinned credentials keep the
+            // ufrag stable across restarts. No listener exists per connection: the mux owns it.
+            if !self.tcp_mux_registered {
+                let conn = mux.register_conn(&ufrag)?;
+                // Forward dispatched streams into the driver's own IncomingTcpStream event,
+                // reusing the path per-connection-listener accepts and active dials take. The
+                // channel closes on deregistration (driver `Drop`), which ends the task.
+                let tx = self.inner.driver_event_tx.clone();
+                self.inner.runtime.spawn(Box::pin(async move {
+                    while let Some(stream) = conn.recv().await {
+                        let addrs = stream.local_addr().and_then(|local_addr| {
+                            stream.peer_addr().map(|peer_addr| FourTuple {
+                                local_addr,
+                                peer_addr,
+                            })
+                        });
+                        match addrs {
+                            Ok(four_tuple) => {
+                                // overflow: detached — this task has nothing else to do, so a
+                                // full event channel parks it alone, never the driver.
+                                let _ = tx
+                                    .send(PeerConnectionDriverEvent::IncomingTcpStream(
+                                        four_tuple, stream,
+                                    ))
+                                    .await;
+                            }
+                            Err(err) => {
+                                warn!("TCP mux dispatched a stream with unusable addresses: {err}");
+                            }
+                        }
+                    }
+                }));
+                self.tcp_mux_registered = true;
+            }
+        } else {
+            self.bind_tcp_listeners(&runtime)?;
+        }
+
+        if self.udp_sockets.is_empty() && self.tcp_transport.is_empty() && !self.tcp_mux_registered
+        {
             return Err(Error::Other(
                 "no udp_sockets or tcp_listeners available".to_owned(),
             ));
         }
 
-        self.rebuild_gatherers(self.ice_servers.clone());
+        // A UDP-muxed connection gathers host candidates only (see bind_muxed_udp); TCP muxing
+        // alone does not constrain UDP gathering.
+        let ice_servers = if self.udp_mux.is_some() {
+            Vec::new()
+        } else {
+            self.ice_servers.clone()
+        };
+        self.rebuild_gatherers(ice_servers);
 
         Ok(())
     }
 
-    /// The muxed counterpart of [`bind_transports`](Self::bind_transports): register with the
-    /// shared socket instead of binding a per-connection one.
+    /// The UDP half of [`bind_transports`](Self::bind_transports) for a muxed connection:
+    /// register with the shared socket instead of binding a per-connection one.
     ///
     /// No UDP socket is created or destroyed here. The mux's socket predates the connection
     /// and survives it; registration happens once and the conn is re-used on rebinds — pinned
     /// credentials keep the ufrag stable across restarts — while the interface expansion below
     /// is redone, so a network handover still refreshes the advertised candidates (webrtc#874)
-    /// even though the socket itself is shared and constant. TCP listeners follow the same
-    /// per-connection rules as in the unmuxed path.
+    /// even though the socket itself is shared and constant.
     ///
     /// `udp_sockets` maps **every advertised interface address** to the one conn. The write
     /// path resolves a packet's `local_addr` (the pair's local candidate) through that map, so
@@ -715,9 +779,9 @@ where
     ///
     /// Gathering is host-only: srflx and relayed gathering would send STUN/TURN traffic to
     /// server addresses shared with every other connection on the mux, whose responses the
-    /// mux cannot tell apart. Configured `ice_servers` are therefore dropped here (with a
-    /// warning), matching the restriction Pion documents for `ICEUDPMux`.
-    fn bind_muxed_transports(&mut self, mux: &Arc<dyn UDPMux>, ufrag: &str) -> Result<()> {
+    /// mux cannot tell apart. Configured `ice_servers` are therefore not handed to the
+    /// gatherers (with a warning), matching the restriction Pion documents for `ICEUDPMux`.
+    fn bind_muxed_udp(&mut self, mux: &Arc<dyn UDPMux>, ufrag: &str) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
         // The mDNS socket is independent of the mux (its own multicast socket either way)
@@ -768,16 +832,6 @@ where
             self.udp_sockets.insert(bind.addr, conn.clone());
         }
         self.mux_conn = Some(conn);
-
-        // TCP listeners are per-connection just like in the unmuxed path — and pinned TCP
-        // ports conflict across connections just like pinned UDP ones. The previous
-        // generation's listeners go first, or a rebind could not reclaim them.
-        self.tcp_transport = RTCTcpTransport::new(HashMap::new());
-        self.bind_tcp_listeners(&runtime)?;
-
-        // Host-only gatherers: the configured ICE servers are deliberately not handed over
-        // (see above).
-        self.rebuild_gatherers(Vec::new());
 
         Ok(())
     }
@@ -877,6 +931,25 @@ where
                 .map(|local_addr| (local_addr, socket.clone(), false))
         }));
         entries
+    }
+
+    /// TCP candidates for a muxed connection: the mux's one listen address, expanded per
+    /// interface on a wildcard listen — the same expansion the UDP side does for the same
+    /// reason (a wildcard candidate is unusable by a peer).
+    fn gather_muxed_tcp_candidates(mux: &Arc<dyn TCPMux>) -> Vec<RTCIceCandidateInit> {
+        let Ok(mux_addr) = mux.local_addr() else {
+            return Vec::new();
+        };
+        let mut binds = Vec::new();
+        if mux_addr.ip().is_unspecified() {
+            expand_wildcard(mux_addr, &mut binds);
+        } else {
+            binds.push(BindAddr {
+                addr: mux_addr,
+                enumerated: false,
+            });
+        }
+        tcp_transport::tcp_host_candidates(binds.iter().map(|bind| bind.addr))
     }
 
     /// Run the driver event loop
@@ -1258,13 +1331,16 @@ where
                                 self.udp_sockets.remove(&local_addr);
                                 active_socket_count -= 1;
 
-                                if active_socket_count == 0 && self.tcp_transport.is_empty() {
+                                if active_socket_count == 0
+                                    && self.tcp_transport.is_empty()
+                                    && !self.tcp_mux_registered
+                                {
                                     return Err(err.into());
                                 }
                             }
                             None => {
                                 // All socket futures completed (should never happen in normal operation)
-                                if self.tcp_transport.is_empty() {
+                                if self.tcp_transport.is_empty() && !self.tcp_mux_registered {
                                     return Err(Error::Other("all socket futures completed".to_owned()));
                                 }
                             }
@@ -1915,7 +1991,10 @@ where
                 };
 
                 if ice_gather_policy != RTCIceTransportPolicy::Relay {
-                    let candidates = self.tcp_transport.gather_candidates();
+                    let candidates = match &self.tcp_mux {
+                        Some((mux, _)) => Self::gather_muxed_tcp_candidates(mux),
+                        None => self.tcp_transport.gather_candidates(),
+                    };
                     let mut core = self.inner.core.lock().await;
                     for candidate_init in candidates {
                         trace!("TCP LocalIceCandidate {:?}", candidate_init);
@@ -2387,6 +2466,11 @@ impl<A> Drop for PeerConnectionDriver<A> {
         // would evict the live connection that owns the registration.
         if let Some((mux, ufrag)) = &self.udp_mux
             && self.mux_conn.is_some()
+        {
+            mux.remove_conn(ufrag);
+        }
+        if let Some((mux, ufrag)) = &self.tcp_mux
+            && self.tcp_mux_registered
         {
             mux.remove_conn(ufrag);
         }

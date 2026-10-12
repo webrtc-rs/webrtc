@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TCP multiplexing: many peer connections over one shared ICE-TCP listener** — the TCP
+  sibling of the UDP mux: new `webrtc::peer_connection::transport::tcp_mux` module with a
+  `TCPMux` trait, the built-in `TCPMuxDefault`, and `PeerConnectionBuilder::with_tcp_mux`.
+  The mux accepts on one listener and dispatches each stream to its connection by the ufrag in
+  the first framed STUN message (replaying the peeked frame), so a whole deployment can share
+  one passive ICE-TCP port. Only the passive side is multiplexed; active dials need no mux.
+  `tests/tcp_mux.rs` runs two connections on one fixed TCP port end to end (ICE-TCP-only
+  peers, data-channel echo).
 - **UDP multiplexing: many peer connections over one shared UDP socket** — new
   `webrtc::peer_connection::transport::udp_mux` module with a `UDPMux` trait and the built-in
   `UDPMuxDefault`. Handing one mux to every `PeerConnectionBuilder::with_udp_mux` serves any
