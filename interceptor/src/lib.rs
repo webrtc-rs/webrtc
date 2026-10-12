@@ -34,6 +34,8 @@ pub trait InterceptorBuilder {
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp
 /// packets, or sending your own packets as needed.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Interceptor {
     /// bind_rtcp_reader lets you modify any incoming RTCP packets. It is called once per sender/receiver, however this might
@@ -76,6 +78,8 @@ pub trait Interceptor {
 }
 
 /// RTPWriter is used by Interceptor.bind_local_stream.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait RTPWriter {
     /// write a rtp packet
@@ -101,6 +105,8 @@ impl RTPWriter for RTPWriterFn {
 }
 
 /// RTPReader is used by Interceptor.bind_remote_stream.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait RTPReader {
     /// read a rtp packet
@@ -135,6 +141,8 @@ impl RTPReader for RTPReaderFn {
 }
 
 /// RTCPWriter is used by Interceptor.bind_rtcpwriter.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait RTCPWriter {
     /// write a batch of rtcp packets
@@ -169,6 +177,8 @@ impl RTCPWriter for RTCPWriterFn {
 }
 
 /// RTCPReader is used by Interceptor.bind_rtcpreader.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait RTCPReader {
     /// read a batch of rtcp packets

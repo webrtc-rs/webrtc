@@ -7,6 +7,8 @@ use tokio::time::Duration;
 pub(crate) const ACK_INTERVAL: Duration = Duration::from_millis(200);
 
 /// ackTimerObserver is the interface to an ack timer observer.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub(crate) trait AckTimerObserver {
     async fn on_ack_timeout(&mut self);

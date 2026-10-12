@@ -21,6 +21,8 @@ use crate::rtp_transceiver::rtp_codec::*;
 use crate::rtp_transceiver::*;
 
 /// TrackLocalWriter is the Writer for outbound RTP Packets
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait TrackLocalWriter: fmt::Debug {
     /// write_rtp_with_attributes encrypts a RTP packet and writes to the connection.
@@ -100,6 +102,8 @@ impl TrackLocalContext {
 /// TrackLocal is an interface that controls how the user can send media
 /// The user can provide their own TrackLocal implementations, or use
 /// the implementations in pkg/media
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait TrackLocal {
     /// bind should implement the way how the media data flows from the Track to the PeerConnection
