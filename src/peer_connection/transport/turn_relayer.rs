@@ -116,20 +116,10 @@ impl RTCTurnRelayer {
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
     ) {
-        // A pure credential rotation — same servers, same policy, different username or
-        // password — must NOT tear the allocations down. `local_addrs` is fixed at
-        // construction (the sockets are shared with host candidates), so a teardown here
-        // means the following `gather()` re-`Allocate`s on exactly the same 5-tuple. The
-        // server still holds the previous allocation for it and answers **437 (Allocation
-        // Mismatch)** per RFC 8656 §7.2, and the restart gathers no relay candidate at all
-        // (issue #835).
-        //
-        // An allocation is a 5-tuple resource, independent of the credential that created
-        // it, so the correct move is to re-sign the allocation we already have: update the
-        // client's credential and Refresh. Allocation, permissions and channel bindings all
-        // survive, so the data path is never interrupted.
+        // RFC 8656 section 5 binds subsequent requests to the allocation's
+        // original username. Keep established clients and their keys intact;
+        // the updated configuration supplies credentials for future allocations.
         if self.is_credential_only_change(&ice_servers, ice_gather_policy) {
-            self.rotate_credentials(&ice_servers);
             self.ice_servers = ice_servers;
             return;
         }
@@ -166,8 +156,8 @@ impl RTCTurnRelayer {
             return false;
         }
 
-        // Nothing to re-sign unless every live client's allocation is established; a client
-        // still mid-Allocate has no allocation to keep.
+        // Only established allocations can retain their original credentials;
+        // a client still mid-Allocate has no allocation to keep.
         if self
             .clients
             .values()
@@ -189,50 +179,6 @@ impl RTCTurnRelayer {
         match (urls_of(ice_servers), urls_of(&self.ice_servers)) {
             (Some(new_urls), Some(old_urls)) => !new_urls.is_empty() && new_urls == old_urls,
             _ => false,
-        }
-    }
-
-    /// Re-signs every live allocation with the rotated credential and refreshes it.
-    ///
-    /// Best-effort per client: a client whose URL is no longer present, or whose refresh
-    /// fails to encode, is left alone rather than torn down — its allocation keeps working
-    /// on the old credential until it expires, which is strictly better than forcing the
-    /// 437 this path exists to avoid.
-    fn rotate_credentials(&mut self, ice_servers: &[RTCIceServer]) {
-        // url string -> (username, credential), matching how `gather` derives them.
-        let mut credentials: HashMap<String, (String, String)> = HashMap::new();
-        for ice_server in ice_servers {
-            let Ok(urls) = ice_server.urls() else {
-                continue;
-            };
-            for url in urls {
-                credentials.insert(
-                    url.to_string(),
-                    (url.username.clone(), url.password.clone()),
-                );
-            }
-        }
-
-        for managed in self.clients.values_mut() {
-            let Some((username, password)) = credentials.get(&managed.url) else {
-                continue;
-            };
-
-            let _ = managed
-                .client
-                .update_credentials(username.clone(), password.clone());
-
-            if let Err(err) = managed.client.refresh_allocations(self.runtime.now()) {
-                warn!(
-                    "TURN credential rotation: refresh failed for {} via {}: {}",
-                    managed.local_addr, managed.url, err
-                );
-            } else {
-                debug!(
-                    "TURN credentials rotated for {} via {}, allocation kept",
-                    managed.local_addr, managed.url
-                );
-            }
         }
     }
 
@@ -1100,6 +1046,156 @@ mod tests {
                 relayer.is_turn_message(&msg),
                 "ChannelData has no transaction id and must route by address"
             );
+        });
+    }
+
+    #[test]
+    fn credential_rotation_preserves_existing_allocation_authentication() {
+        futures::executor::block_on(async {
+            use rtc::stun::attributes::ATTR_USERNAME;
+            use rtc::stun::message::{Getter, METHOD_ALLOCATE, METHOD_REFRESH};
+            use rtc::stun::textattrs::Username;
+            use rtc::turn::proto::lifetime::Lifetime;
+            use rtc::turn::proto::relayaddr::RelayedAddress;
+
+            let local_addr: SocketAddr = "127.0.0.1:50000".parse().unwrap();
+            let server_addr: SocketAddr = "127.0.0.1:3478".parse().unwrap();
+            let relay_addr: SocketAddr = "127.0.0.1:60000".parse().unwrap();
+            let server = |username: &str, password: &str| RTCIceServer {
+                urls: vec![format!("turn:{server_addr}?transport=udp")],
+                username: username.into(),
+                credential: password.into(),
+            };
+            let mut relayer = RTCTurnRelayer::new(
+                vec![local_addr],
+                vec![server("original", "original-password")],
+                RTCIceTransportPolicy::Relay,
+                None,
+                crate::runtime::default_runtime().unwrap(),
+                rtc::crypto::default_provider().unwrap(),
+            );
+            relayer.gather().await.unwrap();
+            let decode = |packet: TaggedBytesMut| {
+                let mut message = StunMessage::new();
+                message.raw = packet.message.to_vec();
+                message.decode().unwrap();
+                message
+            };
+            let initial = decode(relayer.poll_write().unwrap());
+            let challenge = build_turn_allocate_unauthorized(initial.transaction_id);
+            relayer
+                .handle_read(tagged(local_addr, server_addr, &challenge.raw))
+                .unwrap();
+            let authenticated = decode(relayer.poll_write().unwrap());
+            let mut success = StunMessage::new();
+            success
+                .build(&[
+                    Box::new(authenticated.transaction_id),
+                    Box::new(MessageType::new(METHOD_ALLOCATE, CLASS_SUCCESS_RESPONSE)),
+                    Box::new(RelayedAddress {
+                        ip: relay_addr.ip(),
+                        port: relay_addr.port(),
+                    }),
+                    Box::new(XorMappedAddress {
+                        ip: local_addr.ip(),
+                        port: local_addr.port(),
+                    }),
+                    Box::new(Lifetime(Duration::from_secs(600))),
+                ])
+                .unwrap();
+            relayer
+                .handle_read(tagged(local_addr, server_addr, &success.raw))
+                .unwrap();
+            while relayer.poll_event().is_some() {}
+            assert_eq!(relayer.relay_addrs.len(), 1);
+            assert!(relayer.poll_write().is_none());
+
+            relayer.update_configuration(
+                vec![server("rotated", "rotated-password")],
+                RTCIceTransportPolicy::Relay,
+            );
+            // Configuration updates apply to future allocations. Re-signing this one
+            // with a different username would receive 441 (RFC 8656 section 5).
+            assert!(
+                relayer.poll_write().is_none(),
+                "rotation must not re-sign an existing allocation"
+            );
+            let now = relayer.runtime.now();
+            for managed in relayer.clients.values_mut() {
+                managed.client.refresh_allocations(now).unwrap();
+            }
+            let refresh = decode(relayer.poll_write().unwrap());
+            assert_eq!(refresh.typ.method, METHOD_REFRESH);
+            let mut username = Username::new(ATTR_USERNAME, String::new());
+            username.get_from(&refresh).unwrap();
+            assert_eq!(username.text, "original");
+            // Compare the original and rotated keys, not only the cleartext username.
+            let crypto_provider = Arc::clone(&relayer.crypto_provider);
+            let crypto = crypto_provider.crypto();
+            let original_key = rtc::stun::integrity::MessageIntegrity::long_term_integrity_key(
+                "original".into(),
+                "webrtc.rs".into(),
+                "original-password".into(),
+                crypto,
+            )
+            .unwrap();
+            rtc::stun::integrity::MessageIntegrity::check(
+                &mut refresh.clone(),
+                &original_key,
+                crypto,
+            )
+            .unwrap();
+            let rotated_key = rtc::stun::integrity::MessageIntegrity::long_term_integrity_key(
+                "rotated".into(),
+                "webrtc.rs".into(),
+                "rotated-password".into(),
+                crypto,
+            )
+            .unwrap();
+            assert!(
+                rtc::stun::integrity::MessageIntegrity::check(
+                    &mut refresh.clone(),
+                    &rotated_key,
+                    crypto,
+                )
+                .is_err()
+            );
+
+            // Retirement also authenticates with the allocation's original identity.
+            relayer.close().unwrap();
+            let retirement = decode(relayer.poll_write().unwrap());
+            username.get_from(&retirement).unwrap();
+            assert_eq!(username.text, "original");
+            let mut lifetime = Lifetime::default();
+            lifetime.get_from(&retirement).unwrap();
+            assert_eq!(lifetime.0, Duration::ZERO);
+            rtc::stun::integrity::MessageIntegrity::check(
+                &mut retirement.clone(),
+                &original_key,
+                crypto,
+            )
+            .unwrap();
+
+            // Once a new transport is gathered, the stored configuration takes effect.
+            relayer.update_configuration(
+                vec![server("rotated", "rotated-password")],
+                RTCIceTransportPolicy::Relay,
+            );
+            relayer.gather().await.unwrap();
+            let initial = decode(relayer.poll_write().unwrap());
+            let challenge = build_turn_allocate_unauthorized(initial.transaction_id);
+            relayer
+                .handle_read(tagged(local_addr, server_addr, &challenge.raw))
+                .unwrap();
+            let new_allocate = decode(relayer.poll_write().unwrap());
+            username.get_from(&new_allocate).unwrap();
+            assert_eq!(username.text, "rotated");
+            rtc::stun::integrity::MessageIntegrity::check(
+                &mut new_allocate.clone(),
+                &rotated_key,
+                crypto,
+            )
+            .unwrap();
         });
     }
 }

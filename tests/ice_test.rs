@@ -83,7 +83,7 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
 ///
 /// `username_tx` reports `(method, username)` for every authenticated request that carries
 /// a credential, so a test can tell *how* a credential reached the server — an `Allocate`
-/// for a fresh allocation, or a `Refresh` re-signing an existing one (issue #835).
+/// for a fresh allocation, or a `Refresh` using an existing allocation's identity.
 async fn run_mock_turn_server(
     turn_socket: Arc<dyn AsyncUdpSocket>,
     relay_addr: SocketAddr,
@@ -702,27 +702,19 @@ fn test_set_configuration_updates_turn_credentials_on_ice_restart() {
             .expect("Failed to update ICE server configuration");
         pc.restart_ice().await.expect("Failed to restart ICE");
 
-        // The rotated credential must reach the server — but as a **Refresh** re-signing the
-        // existing allocation, not a second Allocate. An allocation is a 5-tuple resource
-        // independent of the credential that created it, and `local_addrs` is fixed at
-        // relayer construction, so re-Allocating here would reuse the same 5-tuple and a
-        // conforming server would reject it with 437 (RFC 5766 §6.2) — issue #835. This mock
-        // answers every Allocate with success, so the method assertion is what guards it;
-        // `turn_credential_rotation.rs` covers the same property against a real server.
-        let (restarted_method, restarted_username) =
-            timeout(Duration::from_secs(5), username_rx.recv())
-                .await
-                .expect("Timed out waiting for the rotated credential to reach the server")
-                .expect("TURN username channel closed");
-        assert_eq!(
-            (restarted_method, restarted_username.as_str()),
-            ("refresh", "username-b"),
-            "a pure credential rotation must re-sign the existing allocation with a Refresh, \
-             not re-Allocate on the same 5-tuple (issue #835)"
-        );
         timeout(Duration::from_secs(5), gathering_rx.recv())
             .await
             .expect("Timed out waiting for restarted relay gathering");
+        // Reusing the allocation must retain its authenticated identity. The
+        // previous assertion expected username-b in Refresh, which would be
+        // rejected with 441 by an RFC 8656 section 5 server.
+        assert!(
+            timeout(Duration::from_millis(100), username_rx.recv())
+                .await
+                .is_err(),
+            "configuration updates must not re-sign an existing allocation"
+        );
+        pc.close().await.unwrap();
 
         turn_task.abort();
     });
