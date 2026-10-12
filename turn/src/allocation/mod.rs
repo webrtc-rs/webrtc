@@ -33,7 +33,7 @@ use crate::proto::data::*;
 use crate::proto::peeraddr::*;
 use crate::proto::*;
 
-const RTP_MTU: usize = 1500;
+const RTP_MTU: usize = crate::proto::UDP_RECEIVE_BUFFER_SIZE;
 
 pub type AllocationMap = HashMap<FiveTuple, Arc<Allocation>>;
 
@@ -81,6 +81,7 @@ pub struct Allocation {
     pub(crate) relay_socket: Arc<dyn Conn + Send + Sync>,
     five_tuple: FiveTuple,
     username: Username,
+    pub(crate) auth_keys: SyncMutex<HashMap<u16, Vec<u8>>>,
     // Cache the authenticated Allocate success for UDP retransmissions. Keeping it
     // with the allocation bounds its lifetime and preserves every response attribute.
     pub(crate) allocate_response: Mutex<Option<Message>>,
@@ -115,6 +116,7 @@ impl Allocation {
         alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
     ) -> Self {
         Allocation {
+            auth_keys: SyncMutex::new(HashMap::new()),
             protocol: PROTO_UDP,
             turn_socket,
             relay_addr,

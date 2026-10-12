@@ -2,6 +2,7 @@
 mod server_test;
 
 pub mod config;
+mod integrity;
 pub mod request;
 
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ use crate::auth::AuthHandler;
 use crate::error::*;
 use crate::proto::lifetime::DEFAULT_LIFETIME;
 
-const INBOUND_MTU: usize = 1500;
+const INBOUND_MTU: usize = crate::proto::UDP_RECEIVE_BUFFER_SIZE;
 
 /// Server is an instance of the TURN Server
 pub struct Server {
@@ -43,7 +44,11 @@ impl Server {
         let (command_tx, _) = broadcast::channel(16);
         let mut s = Server {
             auth_handler: config.auth_handler,
-            realm: config.realm,
+            realm: if config.realm.is_empty() {
+                config.realm
+            } else {
+                crate::auth::prepare_realm(&config.realm)?
+            },
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
             command_tx: Mutex::new(Some(command_tx.clone())),
@@ -159,10 +164,11 @@ impl Server {
             async move {
                 loop {
                     match handle_rx.recv().await {
-                        Ok(Command::DeleteAllocations(name, _)) => {
+                        Ok(Command::DeleteAllocations(name, completion)) => {
                             allocation_manager
                                 .delete_allocations_by_username(name.as_str())
                                 .await;
+                            drop(completion);
                             continue;
                         }
                         Ok(Command::GetAllocationsInfo(five_tuples, tx)) => {

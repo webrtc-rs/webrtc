@@ -167,6 +167,10 @@ impl Manager {
         Ok(a)
     }
 
+    pub(crate) fn supports_family(&self, use_ipv4: bool) -> bool {
+        self.relay_addr_generator.supports_family(use_ipv4)
+    }
+
     pub(crate) async fn allocate_relay(&self, use_ipv4: bool) -> Result<Relay> {
         self.relay_addr_generator.allocate_conn(use_ipv4, 0).await
     }
