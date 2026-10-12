@@ -167,6 +167,38 @@ impl Request {
             return Ok(None);
         }
 
+        if let Err(err) = realm_attr.get_from(m) {
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
+            return Ok(None);
+        }
+        if let Err(err) = username_attr.get_from(m) {
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
+            return Ok(None);
+        }
+
+        let our_key = match self.auth_handler.auth_handle(
+            &username_attr.to_string(),
+            &realm_attr.to_string(),
+            self.src_addr,
+        ) {
+            Ok(key) => key,
+            Err(_) => {
+                self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
+                    .await?;
+                return Ok(None);
+            }
+        };
+
+        let mi = MessageIntegrity(our_key);
+        // RFC 8489 section 9.2.4: a bad
+        // credential or HMAC receives a 401 challenge before nonce freshness
+        // is considered. Missing identity attributes have already produced 400.
+        if mi.check(&mut m.clone()).is_err() {
+            self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
+                .await?;
+            return Ok(None);
+        }
+
         let to_be_deleted = {
             // Assert Nonce exists and is not expired
             let mut nonces = self.nonces.lock().await;
@@ -192,40 +224,7 @@ impl Request {
             return Ok(None);
         }
 
-        if let Err(err) = realm_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
-            return Ok(None);
-        }
-        if let Err(err) = username_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
-            return Ok(None);
-        }
-
-        let our_key = match self.auth_handler.auth_handle(
-            &username_attr.to_string(),
-            &realm_attr.to_string(),
-            self.src_addr,
-        ) {
-            Ok(key) => key,
-            Err(_) => {
-                build_and_send_err(
-                    &self.conn,
-                    self.src_addr,
-                    bad_request_msg,
-                    Error::ErrNoSuchUser,
-                )
-                .await?;
-                return Ok(None);
-            }
-        };
-
-        let mi = MessageIntegrity(our_key);
-        if let Err(err) = mi.check(&mut m.clone()) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
-            Ok(None)
-        } else {
-            Ok(Some((username_attr, mi)))
-        }
+        Ok(Some((username_attr, mi)))
     }
 
     async fn respond_with_nonce(
