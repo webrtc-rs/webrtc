@@ -274,3 +274,8 @@ required-features = ["runtime-tokio"]
 name = "stats"
 path = "examples/stats/stats.rs"
 bench = false
+
+[[example]]
+name = "udp-mux"
+path = "examples/udp-mux/udp-mux.rs"
+bench = false

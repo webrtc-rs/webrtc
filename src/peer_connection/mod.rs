@@ -86,6 +86,7 @@ use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
+use crate::peer_connection::transport::udp_mux;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::Registry;
 
@@ -184,6 +185,7 @@ pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
+    udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
     dedicated_reactor_pool_size: usize,
     data_channel_send_buffer_limit: usize,
     /// Held rather than forwarded immediately, so [`build`](Self::build) can resolve the crypto
@@ -199,6 +201,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A> {
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+            udp_mux: None,
             dedicated_reactor_pool_size: 0,
             setting_engine: SettingEngine::default(),
             // `usize::MAX` = unbounded: no send back-pressure unless the application
@@ -285,6 +288,24 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         self
     }
 
+    /// Shares one UDP socket across connections instead of binding per connection.
+    ///
+    /// The mux owns the socket; this connection registers on it under its ICE ufrag and
+    /// receives the datagrams routed to that ufrag. This is the deployment shape of servers
+    /// like SRS or mediamtx: exactly one UDP port to open or forward, however many
+    /// connections the process serves. See [`udp_mux`] for how routing works and the
+    /// constraints (host candidates only; pinned ICE credentials).
+    ///
+    /// Mutually exclusive with [`with_udp_addrs`](Self::with_udp_addrs) and with setting ICE
+    /// credentials explicitly
+    /// ([`SettingEngineBuilder::with_ice_credentials`](rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder::with_ice_credentials)):
+    /// the mux manages the credentials it routes by, and `build` fails if either is combined
+    /// with a mux.
+    pub fn with_udp_mux(mut self, udp_mux: Arc<dyn udp_mux::UDPMux>) -> Self {
+        self.udp_mux = Some(udp_mux);
+        self
+    }
+
     /// Set the size of the dedicated reactor pool used. Defaults to `0`, means disabled.
     /// Values above `1024` are clamped down to it.
     ///
@@ -364,6 +385,37 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         };
         self.setting_engine
             .set_crypto_provider(crypto_provider.clone());
+
+        // A muxed connection's credentials are its routing key: the mux's reader demultiplexes
+        // inbound STUN by the local ufrag, before any SDP has been exchanged. Pin them here —
+        // generated, unless the application pinned its own — so they are fixed from agent
+        // creation through every ICE restart, and so `build` fails on a combination that cannot
+        // work rather than misrouting silently.
+        let mux_ufrag = if self.udp_mux.is_some() {
+            if !self.udp_addrs.is_empty() {
+                return Err(Error::Other(
+                    "`with_udp_addrs` and `with_udp_mux` are mutually exclusive: the mux owns \
+                     the socket, there is nothing left to bind"
+                        .to_owned(),
+                ));
+            }
+            let (ufrag, pwd) = self.setting_engine.ice_credentials();
+            if ufrag.is_empty() && pwd.is_empty() {
+                let ufrag = rtc::ice::rand::generate_ufrag();
+                self.setting_engine
+                    .set_ice_credentials(ufrag.clone(), rtc::ice::rand::generate_pwd());
+                ufrag
+            } else {
+                // Application-pinned credentials are honoured. They must be unique per
+                // connection on one mux — a duplicate ufrag would merge two connections'
+                // routes — which registration enforces: `UDPMux::register_conn` refuses the
+                // second one and `build` fails the way a failed bind does.
+                ufrag.to_owned()
+            }
+        } else {
+            String::new()
+        };
+
         let mdns_mode = self.setting_engine.multicast_dns().mode;
         let turn_allocation_refresh_interval_cap =
             self.setting_engine.turn_allocation_refresh_interval_cap();
@@ -399,6 +451,8 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
             discard_local_candidates_during_ice_restart,
             self.udp_addrs,
             self.tcp_addrs,
+            self.udp_mux,
+            mux_ufrag,
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
             turn_allocation_refresh_interval_cap,
@@ -989,6 +1043,8 @@ impl PeerConnectionImpl {
         discard_local_candidates_during_ice_restart: bool,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
+        udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
+        mux_ufrag: String,
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
         turn_allocation_refresh_interval_cap: Option<Duration>,
@@ -1047,6 +1103,8 @@ impl PeerConnectionImpl {
                 inner,
                 udp_addrs,
                 tcp_addrs,
+                udp_mux,
+                mux_ufrag,
                 mdns_mode,
                 ice_servers,
                 ice_gather_policy,
