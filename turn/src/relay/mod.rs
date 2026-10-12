@@ -12,6 +12,8 @@ use crate::error::Result;
 
 /// `RelayAddressGenerator` is used to generate a Relay Address when creating an allocation.
 /// You can use one of the provided ones or provide your own.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait RelayAddressGenerator {
     /// Confirms that this is properly initialized

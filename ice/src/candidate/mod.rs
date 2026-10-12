@@ -38,6 +38,8 @@ pub(crate) const COMPONENT_RTP: u16 = 1;
 pub(crate) const COMPONENT_RTCP: u16 = 0;
 
 /// Candidate represents an ICE candidate
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Candidate: fmt::Display {
     /// An arbitrary string used in the freezing algorithm to

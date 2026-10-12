@@ -97,6 +97,8 @@ pub(crate) fn calculate_next_timeout(rto: u64, n_rtos: usize) -> u64 {
 /// rtxTimerObserver is the interface to a timer observer.
 /// NOTE: Observers MUST NOT call start() or stop() method on rtxTimer
 /// from within these callbacks.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub(crate) trait RtxTimerObserver {
     async fn on_retransmission_timeout(&mut self, timer_id: RtxTimerId, n: usize);

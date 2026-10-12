@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use rand::Rng;
 use rustls::pki_types::CertificateDer;
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 use util::conn::conn_pipe::*;
 use util::KeyingMaterialExporter;
 
@@ -441,6 +441,7 @@ async fn test_export_keying_material() -> Result<()> {
         packet_tx: Arc::new(packet_tx),
         handle_queue_tx,
         handshake_done_tx: None,
+        last_flight: Arc::new(Mutex::new(None)),
 
         reader_close_tx: Mutex::new(None),
     };
@@ -2460,5 +2461,189 @@ async fn test_renegotiation_info() -> Result<()> {
         ca.close().await?;
     }
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Final flight loss (RFC 6347 section 4.2.4)
+// ---------------------------------------------------------------------------
+
+/// Walks the DTLS records of a datagram and returns `(content_type, epoch)` pairs.
+fn datagram_records(buf: &[u8]) -> Vec<(u8, u16)> {
+    let mut out = vec![];
+    let mut i = 0;
+    while i + RECORD_LAYER_HEADER_SIZE <= buf.len() {
+        let content_type = buf[i];
+        let epoch = u16::from_be_bytes([buf[i + 3], buf[i + 4]]);
+        let len = u16::from_be_bytes([buf[i + 11], buf[i + 12]]) as usize;
+        out.push((content_type, epoch));
+        i += RECORD_LAYER_HEADER_SIZE + len;
+    }
+    out
+}
+
+/// The server's final flight (flight 6) starts with ChangeCipherSpec and carries
+/// the epoch 1 Finished.
+fn is_final_flight_datagram(buf: &[u8]) -> bool {
+    datagram_records(buf)
+        .iter()
+        .any(|(t, e)| *t == 20 || (*t == 22 && *e == 1))
+}
+
+#[derive(Default)]
+struct FinalFlightFilter {
+    // drop the first copy of the final flight
+    drop_first: AtomicBool,
+    // drop every copy of the final flight
+    drop_all: AtomicBool,
+    dropped: AtomicU16,
+    // final flight datagrams handed to the wire (including dropped ones)
+    final_flight_sends: portable_atomic::AtomicUsize,
+}
+
+/// Wraps the server side of a pipe and drops outgoing final flight datagrams.
+struct FinalFlightDropConn {
+    inner: Arc<dyn util::Conn + Send + Sync>,
+    filter: Arc<FinalFlightFilter>,
+}
+
+#[async_trait]
+impl util::Conn for FinalFlightDropConn {
+    async fn connect(&self, addr: SocketAddr) -> UtilResult<()> {
+        self.inner.connect(addr).await
+    }
+    async fn recv(&self, buf: &mut [u8]) -> UtilResult<usize> {
+        self.inner.recv(buf).await
+    }
+    async fn recv_from(&self, buf: &mut [u8]) -> UtilResult<(usize, SocketAddr)> {
+        self.inner.recv_from(buf).await
+    }
+    async fn send(&self, buf: &[u8]) -> UtilResult<usize> {
+        if is_final_flight_datagram(buf) {
+            self.filter
+                .final_flight_sends
+                .fetch_add(1, Ordering::SeqCst);
+            let drop_it = self.filter.drop_all.load(Ordering::SeqCst)
+                || self.filter.drop_first.swap(false, Ordering::SeqCst);
+            if drop_it {
+                self.filter.dropped.fetch_add(1, Ordering::SeqCst);
+                return Ok(buf.len());
+            }
+        }
+        self.inner.send(buf).await
+    }
+    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> UtilResult<usize> {
+        self.inner.send_to(buf, target).await
+    }
+    fn local_addr(&self) -> UtilResult<SocketAddr> {
+        self.inner.local_addr()
+    }
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.inner.remote_addr()
+    }
+    async fn close(&self) -> UtilResult<()> {
+        self.inner.close().await
+    }
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
+}
+
+fn final_flight_test_config() -> Config {
+    Config {
+        flight_interval: Duration::from_millis(100),
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn test_server_final_flight_lost_once_client_completes() -> Result<()> {
+    let (ua, ub) = pipe();
+    let filter = Arc::new(FinalFlightFilter::default());
+    filter.drop_first.store(true, Ordering::SeqCst);
+    let server_conn: Arc<dyn util::Conn + Send + Sync> = Arc::new(FinalFlightDropConn {
+        inner: Arc::new(ub),
+        filter: Arc::clone(&filter),
+    });
+
+    let client_task = tokio::spawn(async move {
+        create_test_client(Arc::new(ua), final_flight_test_config(), true).await
+    });
+    let server = create_test_server(server_conn, final_flight_test_config(), true).await?;
+
+    let client = tokio::time::timeout(Duration::from_secs(5), client_task)
+        .await
+        .expect("client handshake did not complete after the server's final flight was lost once")
+        .expect("client task panicked")?;
+
+    assert_eq!(filter.dropped.load(Ordering::SeqCst), 1);
+
+    client.write(b"ping", Some(Duration::from_secs(5))).await?;
+    let mut buf = vec![0u8; 64];
+    let n = server.read(&mut buf, Some(Duration::from_secs(5))).await?;
+    assert_eq!(&buf[..n], b"ping");
+
+    server.write(b"pong", Some(Duration::from_secs(5))).await?;
+    let n = client.read(&mut buf, Some(Duration::from_secs(5))).await?;
+    assert_eq!(&buf[..n], b"pong");
+
+    client.close().await?;
+    server.close().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_server_final_flight_resend_is_bounded() -> Result<()> {
+    // Every copy of the final flight is lost, so the client keeps retransmitting
+    // its flight (every 100 ms). The server may answer each retransmission at
+    // most once, never more often than every 100 ms, and stops once the resend
+    // window has passed.
+    let (ua, ub) = pipe();
+    let filter = Arc::new(FinalFlightFilter::default());
+    filter.drop_all.store(true, Ordering::SeqCst);
+    let server_conn: Arc<dyn util::Conn + Send + Sync> = Arc::new(FinalFlightDropConn {
+        inner: Arc::new(ub),
+        filter: Arc::clone(&filter),
+    });
+
+    let client_task = tokio::spawn(async move {
+        create_test_client(Arc::new(ua), final_flight_test_config(), true).await
+    });
+    let server = create_test_server(server_conn, final_flight_test_config(), true).await?;
+
+    // the original send
+    assert_eq!(filter.final_flight_sends.load(Ordering::SeqCst), 1);
+
+    let started = Instant::now();
+    sleep(Duration::from_millis(1500)).await;
+    let resends = filter.final_flight_sends.load(Ordering::SeqCst) - 1;
+    let elapsed_windows = (started.elapsed().as_millis() / 100) as usize + 1;
+    assert!(resends >= 1, "server never resent its final flight");
+    assert!(
+        resends <= elapsed_windows,
+        "{resends} resends in {:?}: more than one per 100 ms",
+        started.elapsed()
+    );
+
+    // Expire the window: no more resends, and the flight is dropped.
+    {
+        let mut last = server.last_flight.lock().await;
+        let lf = last.as_mut().expect("server kept its final flight");
+        lf.sent_at = Instant::now()
+            .checked_sub(FINAL_FLIGHT_RESEND_WINDOW + Duration::from_secs(1))
+            .expect("monotonic clock far enough from its origin");
+    }
+    sleep(Duration::from_millis(300)).await;
+    let after_expiry = filter.final_flight_sends.load(Ordering::SeqCst);
+    sleep(Duration::from_millis(600)).await;
+    assert_eq!(
+        filter.final_flight_sends.load(Ordering::SeqCst),
+        after_expiry,
+        "server resent its final flight after the window expired"
+    );
+    assert!(server.last_flight.lock().await.is_none());
+
+    server.close().await?;
+    client_task.abort();
     Ok(())
 }
