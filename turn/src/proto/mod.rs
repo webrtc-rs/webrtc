@@ -29,6 +29,9 @@ pub const PROTO_TCP: Protocol = Protocol(6);
 /// `PROTO_UDP` is IANA assigned protocol number for UDP.
 pub const PROTO_UDP: Protocol = Protocol(17);
 
+/// Receive capacity for complete UDP datagrams, independent of an Ethernet MTU.
+pub const UDP_RECEIVE_BUFFER_SIZE: usize = 65535;
+
 impl fmt::Display for Protocol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let others = format!("{}", self.0);

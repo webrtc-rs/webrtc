@@ -17,6 +17,11 @@ pub trait RelayAddressGenerator {
     /// Confirms that this is properly initialized
     fn validate(&self) -> Result<()>;
 
+    /// Whether the configured relay supports this address family.
+    fn supports_family(&self, _use_ipv4: bool) -> bool {
+        true
+    }
+
     /// Allocates a Relay Address
     async fn allocate_conn(
         &self,
