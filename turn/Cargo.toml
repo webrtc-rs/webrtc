@@ -32,12 +32,18 @@ async-trait = "0.1"
 log = "0.4"
 base64 = "0.22.1"
 rand = "0.9"
+precis-profiles = "0.1.13"
+subtle = "2"
 ring = "0.17.14"
 md-5 = "0.10"
 thiserror = "1"
 portable-atomic = "1.6"
 
 [dev-dependencies]
+tokio = { version = "1.32.0", features = ["test-util"] }
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
 env_logger = "0.11.3"
 hex = "0.4"
 clap = "3"
