@@ -391,7 +391,7 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         // generated, unless the application pinned its own — so they are fixed from agent
         // creation through every ICE restart, and so `build` fails on a combination that cannot
         // work rather than misrouting silently.
-        let mux_ufrag = if self.udp_mux.is_some() {
+        let udp_mux = if let Some(mux) = self.udp_mux {
             if !self.udp_addrs.is_empty() {
                 return Err(Error::Other(
                     "`with_udp_addrs` and `with_udp_mux` are mutually exclusive: the mux owns \
@@ -400,20 +400,32 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
                 ));
             }
             let (ufrag, pwd) = self.setting_engine.ice_credentials();
-            if ufrag.is_empty() && pwd.is_empty() {
-                let ufrag = rtc::ice::rand::generate_ufrag();
-                self.setting_engine
-                    .set_ice_credentials(ufrag.clone(), rtc::ice::rand::generate_pwd());
-                ufrag
-            } else {
+            let ufrag = match (ufrag.is_empty(), pwd.is_empty()) {
+                (true, true) => {
+                    let ufrag = rtc::ice::rand::generate_ufrag();
+                    self.setting_engine
+                        .set_ice_credentials(ufrag.clone(), rtc::ice::rand::generate_pwd());
+                    ufrag
+                }
                 // Application-pinned credentials are honoured. They must be unique per
                 // connection on one mux — a duplicate ufrag would merge two connections'
                 // routes — which registration enforces: `UDPMux::register_conn` refuses the
                 // second one and `build` fails the way a failed bind does.
-                ufrag.to_owned()
-            }
+                (false, false) => ufrag.to_owned(),
+                // Half a pair cannot work: the agent fills the empty half with a random value,
+                // so a pinned pwd with a generated ufrag would register a route nothing
+                // matches. Set both or neither.
+                _ => {
+                    return Err(Error::Other(
+                        "ICE credentials are half-set: with a UDP mux, set both ufrag and \
+                         password or neither"
+                            .to_owned(),
+                    ));
+                }
+            };
+            Some((mux, ufrag))
         } else {
-            String::new()
+            None
         };
 
         let mdns_mode = self.setting_engine.multicast_dns().mode;
@@ -451,8 +463,7 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
             discard_local_candidates_during_ice_restart,
             self.udp_addrs,
             self.tcp_addrs,
-            self.udp_mux,
-            mux_ufrag,
+            udp_mux,
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
             turn_allocation_refresh_interval_cap,
@@ -1043,8 +1054,7 @@ impl PeerConnectionImpl {
         discard_local_candidates_during_ice_restart: bool,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
-        udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
-        mux_ufrag: String,
+        udp_mux: Option<(Arc<dyn udp_mux::UDPMux>, String)>,
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
         turn_allocation_refresh_interval_cap: Option<Duration>,
@@ -1104,7 +1114,6 @@ impl PeerConnectionImpl {
                 udp_addrs,
                 tcp_addrs,
                 udp_mux,
-                mux_ufrag,
                 mdns_mode,
                 ice_servers,
                 ice_gather_policy,

@@ -534,12 +534,11 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     /// than the ones that existed when the connection was built.
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    /// The shared socket this connection rides on, when it is muxed. Mutually exclusive with
-    /// binding `udp_addrs` per connection; see [`udp_mux`](crate::peer_connection::transport::udp_mux).
-    udp_mux: Option<Arc<dyn UDPMux>>,
-    /// The ufrag `udp_mux` routes by. ICE credentials are pinned to it at build time, so it
-    /// stays valid across ICE restarts.
-    mux_ufrag: String,
+    /// The shared socket this connection rides on, when it is muxed, and the ufrag it routes
+    /// by. ICE credentials are pinned to that ufrag at build time, so it stays valid across
+    /// ICE restarts. Mutually exclusive with binding `udp_addrs` per connection; see
+    /// [`udp_mux`](crate::peer_connection::transport::udp_mux).
+    udp_mux: Option<(Arc<dyn UDPMux>, String)>,
     /// The connection's registration in `udp_mux`, registered once at first bind and re-used
     /// on every rebind. Kept separately from `udp_sockets`: that map keys the conn by every
     /// advertised interface address for the write path, while the receive loop wants exactly
@@ -570,8 +569,7 @@ where
         inner: Arc<PeerConnectionRef>,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
-        udp_mux: Option<Arc<dyn UDPMux>>,
-        mux_ufrag: String,
+        udp_mux: Option<(Arc<dyn UDPMux>, String)>,
         mdns_mode: MulticastDnsMode,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -609,7 +607,6 @@ where
             udp_addrs,
             tcp_addrs,
             udp_mux,
-            mux_ufrag,
             mux_conn: None,
             mdns_mode,
             ice_servers,
@@ -645,8 +642,8 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
-        if let Some(mux) = self.udp_mux.clone() {
-            return self.bind_muxed_transports(&mux);
+        if let Some((mux, ufrag)) = self.udp_mux.clone() {
+            return self.bind_muxed_transports(&mux, &ufrag);
         }
 
         // Release TURN allocations while the old UDP sockets still exist. Rebinding drops them
@@ -720,7 +717,7 @@ where
     /// server addresses shared with every other connection on the mux, whose responses the
     /// mux cannot tell apart. Configured `ice_servers` are therefore dropped here (with a
     /// warning), matching the restriction Pion documents for `ICEUDPMux`.
-    fn bind_muxed_transports(&mut self, mux: &Arc<dyn UDPMux>) -> Result<()> {
+    fn bind_muxed_transports(&mut self, mux: &Arc<dyn UDPMux>, ufrag: &str) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
         // The mDNS socket is independent of the mux (its own multicast socket either way)
@@ -735,7 +732,7 @@ where
             Some(conn) => conn.clone(),
             // First bind registers strictly: a duplicate ufrag is a configuration error, and
             // failing here reports it out of `build()` like a failed socket bind.
-            None => mux.register_conn(&self.mux_ufrag)?,
+            None => mux.register_conn(ufrag)?,
         };
         let mux_addr = mux.local_addr()?;
 
@@ -863,7 +860,7 @@ where
     fn udp_socket_entries(&self) -> Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>, bool)> {
         let mut entries: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>, bool)> =
             match (&self.udp_mux, &self.mux_conn) {
-                (Some(mux), Some(conn)) => match mux.local_addr() {
+                (Some((mux, _)), Some(conn)) => match mux.local_addr() {
                     Ok(local_addr) => vec![(local_addr, conn.clone(), true)],
                     Err(_) => vec![],
                 },
@@ -2385,9 +2382,13 @@ impl<A> Drop for PeerConnectionDriver<A> {
     fn drop(&mut self) {
         // Deregister from the mux, whatever exit the driver took — a clean close, an error,
         // or an init failure after registration. Without it the mux would keep routing the
-        // ufrag to a conn nobody reads from.
-        if let Some(mux) = &self.udp_mux {
-            mux.remove_conn(&self.mux_ufrag);
+        // ufrag to a conn nobody reads from. The `mux_conn` guard matters for a driver whose
+        // build *failed before registering* (e.g. a duplicate ufrag): without it, its drop
+        // would evict the live connection that owns the registration.
+        if let Some((mux, ufrag)) = &self.udp_mux
+            && self.mux_conn.is_some()
+        {
+            mux.remove_conn(ufrag);
         }
     }
 }

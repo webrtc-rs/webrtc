@@ -38,10 +38,10 @@
 //!
 //! * **Credentials are pinned per connection.** Routing is by ufrag, so a muxed connection's
 //!   ICE credentials must be known before signaling and must not change across ICE restarts.
-//!   `build()` generates a random pair and injects it with
-//!   [`set_ice_credentials`](rtc::peer_connection::configuration::setting_engine::SettingEngine::set_ice_credentials);
-//!   setting credentials explicitly *and* using a mux is rejected, since a duplicated ufrag
-//!   would route two connections' packets to the same place.
+//!   `build()` generates a random pair and injects it into the setting engine; credentials set
+//!   explicitly by the application are honoured instead, but must then be unique per connection
+//!   on one mux — registration refuses a duplicate ufrag, failing `build` the way a failed
+//!   bind does. Setting only one half of the pair is rejected.
 //! * **Host candidates only.** Server-reflexive and relayed gathering send STUN/TURN traffic
 //!   to a small set of server addresses, and two connections behind one mux addressing the
 //!   same STUN server would collide in the address table. A muxed connection therefore
@@ -58,7 +58,7 @@
 //!   rotate them). The restarted generation still re-gathers and re-checks, and the transport
 //!   genuinely never changed, so there is nothing for the peer to re-pair with.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{self, IoSliceMut};
 use std::net::{IpAddr, SocketAddr};
@@ -67,7 +67,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::task::{Context, Poll};
 
-use futures::Stream;
+use futures::{FutureExt, Stream};
 use log::{trace, warn};
 use rtc::stun::attributes::ATTR_USERNAME;
 use rtc::stun::message::{Message as StunMessage, is_stun_message};
@@ -75,21 +75,50 @@ use rtc::stun::message::{Message as StunMessage, is_stun_message};
 use super::{gro_recv_buf_len, is_retryable_socket_recv_error};
 #[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
 use crate::runtime::default_runtime;
-use crate::runtime::{AsyncUdpSocket, RecvMeta, Runtime, Transmit};
+use crate::runtime::{AsyncUdpSocket, Notify, RecvMeta, Runtime, Transmit};
 
 /// Inbound datagrams queued per connection. Media has no flow control to absorb a stalled
 /// consumer — the queue exists to ride out scheduling bursts, so past its capacity the mux
 /// drops, as UDP itself would.
 const MUXED_CONN_CHANNEL_CAPACITY: usize = 512;
 
+/// Pooled datagram buffers are this big: one WebRTC datagram (MTU 1500) plus headroom. A
+/// bigger datagram gets its own allocation, which is never pooled back.
+const POOL_BUF_LEN: usize = 2048;
+
+/// A freelist of datagram buffers shared between the mux's reader (filling them) and the
+/// conns (draining and returning them), so steady-state packet delivery does not allocate.
+struct BufPool {
+    free: Mutex<Vec<Box<[u8]>>>,
+}
+
+impl BufPool {
+    fn get(&self) -> Box<[u8]> {
+        self.free
+            .lock()
+            .unwrap()
+            .pop()
+            .unwrap_or_else(|| vec![0u8; POOL_BUF_LEN].into_boxed_slice())
+    }
+
+    fn put(&self, buf: Box<[u8]>) {
+        if buf.len() == POOL_BUF_LEN {
+            self.free.lock().unwrap().push(buf);
+        }
+    }
+}
+
 /// One inbound datagram routed to a connection.
 #[derive(Debug)]
 struct MuxedPacket {
+    /// The datagram's bytes; only `data[..len]` is payload. Pooled — see [`BufPool`].
     data: Box<[u8]>,
+    len: usize,
     peer_addr: SocketAddr,
     /// The datagram's real destination IP, from `IP_PKTINFO` where the platform supplies it.
     /// A wildcard-bound mux socket needs it to tell one interface's candidate from another's.
     dst_ip: Option<IpAddr>,
+    ecn: Option<crate::runtime::EcnCodepoint>,
 }
 
 /// A UDP socket shared by many peer connections, demultiplexing inbound datagrams by ICE
@@ -110,15 +139,10 @@ pub trait UDPMux: fmt::Debug + Send + Sync + 'static {
     ///
     /// Fails with [`io::ErrorKind::AlreadyExists`] when the ufrag is taken: two connections
     /// registered under one ufrag would share one route, so the duplicate must be refused
-    /// rather than silently merged.
+    /// rather than silently merged. A rebind (ICE restart) re-uses the connection's existing
+    /// registration instead of registering again — pinned credentials keep the ufrag stable,
+    /// so the conn never changes.
     fn register_conn(&self, ufrag: &str) -> io::Result<Arc<dyn AsyncUdpSocket>>;
-
-    /// Re-attaches to the connection registered under `ufrag`, creating it if absent.
-    ///
-    /// This is the ICE-restart path: a rebind re-registers under the same pinned credentials,
-    /// so unlike [`register_conn`](Self::register_conn) an existing registration is returned,
-    /// not refused.
-    fn get_conn(&self, ufrag: &str) -> io::Result<Arc<dyn AsyncUdpSocket>>;
 
     /// Deregisters the connection under `ufrag`, if any. Its queued datagrams are dropped and
     /// its peer-address routes are removed.
@@ -142,6 +166,12 @@ pub struct UDPMuxDefault {
     /// (DTLS, SRTP, SRTCP — none of which carry a ufrag) route without parsing. Values are
     /// weak: a route to a forgotten connection lapses instead of leaking.
     address_map: Arc<Mutex<HashMap<SocketAddr, Weak<UdpMuxedConn>>>>,
+    /// Datagram buffer pool shared by the reader and every conn.
+    pool: Arc<BufPool>,
+    /// Wakes the reader out of its parked receive on [`close`](UDPMux::close). The reader
+    /// parks in the socket's `poll_recv`, which no flag check can interrupt — so close
+    /// notifies, and the loop also re-checks the flag on every packet.
+    closed_notify: Arc<Notify>,
     closed: AtomicBool,
 }
 
@@ -177,6 +207,10 @@ impl UDPMuxDefault {
             local_addr,
             conns: Mutex::new(HashMap::new()),
             address_map: Arc::new(Mutex::new(HashMap::new())),
+            pool: Arc::new(BufPool {
+                free: Mutex::new(Vec::new()),
+            }),
+            closed_notify: Arc::new(Notify::new()),
             closed: AtomicBool::new(false),
         });
         // The reader holds the mux weakly, so dropping the last handle ends the task —
@@ -194,29 +228,6 @@ impl UDPMuxDefault {
         Self::new(runtime, socket)
     }
 
-    /// Shared constructor for [`register_conn`](UDPMux::register_conn) and
-    /// [`get_conn`](UDPMux::get_conn): builds and registers the conn. Callers hold the `conns`
-    /// lock and have already decided whether an existing ufrag is an error or a re-attach.
-    fn insert_conn(
-        &self,
-        conns: &mut HashMap<String, Arc<UdpMuxedConn>>,
-        ufrag: &str,
-    ) -> Arc<UdpMuxedConn> {
-        let (tx, rx) = async_channel::bounded(MUXED_CONN_CHANNEL_CAPACITY);
-        let conn = Arc::new(UdpMuxedConn {
-            ufrag: ufrag.to_owned(),
-            local_addr: self.local_addr,
-            socket: Arc::clone(&self.socket),
-            address_map: Arc::clone(&self.address_map),
-            rx: Mutex::new(Box::pin(rx)),
-            tx,
-            me: OnceLock::new(),
-        });
-        let _ = conn.me.set(Arc::downgrade(&conn));
-        conns.insert(ufrag.to_owned(), conn.clone());
-        conn
-    }
-
     /// The reader: pull datagrams off the shared socket and route each to its connection.
     ///
     /// GRO may coalesce several datagrams of one flow into a single receive; they are split by
@@ -225,15 +236,24 @@ impl UDPMuxDefault {
         let Some(this) = mux.upgrade() else { return };
         let socket = Arc::clone(&this.socket);
         let mut buf = vec![0u8; gro_recv_buf_len(socket.max_gro_segments())];
+        // Created once: the listener observes `close()` from here on, and re-polled each
+        // iteration. (Re-creating it per packet would allocate per packet.)
+        let mut closed = Box::pin(this.closed_notify.listen().fuse());
         drop(this);
 
         loop {
             let mut meta = [RecvMeta::default(); 1];
-            let recv = futures::future::poll_fn(|cx| {
+            let mut recv = futures::future::poll_fn(|cx| {
                 let mut bufs = [IoSliceMut::new(buf.as_mut_slice())];
                 socket.poll_recv(cx, &mut bufs, &mut meta)
             })
-            .await;
+            .fuse();
+
+            let recv = futures::select! {
+                res = recv => res,
+                // The mux was closed while the receive was parked.
+                _ = closed.as_mut() => return,
+            };
 
             let Some(this) = mux.upgrade() else { return };
             match recv {
@@ -245,7 +265,7 @@ impl UDPMuxDefault {
                     let mut off = 0;
                     while off < meta.len {
                         let end = (off + step).min(meta.len);
-                        this.route(&buf[off..end], meta.addr, meta.dst_ip);
+                        this.route(&buf[off..end], meta.addr, meta.dst_ip, meta.ecn);
                         off = end;
                     }
                 }
@@ -266,7 +286,13 @@ impl UDPMuxDefault {
     /// else — DTLS, SRTP, SRTCP, and STUN without a resolvable USERNAME (binding responses) —
     /// routes by the address learnt when the connection last sent to or was matched for that
     /// peer.
-    fn route(&self, data: &[u8], peer_addr: SocketAddr, dst_ip: Option<IpAddr>) {
+    fn route(
+        &self,
+        data: &[u8],
+        peer_addr: SocketAddr,
+        dst_ip: Option<IpAddr>,
+        ecn: Option<crate::runtime::EcnCodepoint>,
+    ) {
         // The v6 dual-stack view of an IPv4 peer is the v4-mapped address; connections and
         // ICE candidates both speak plain IPv4, so routes are keyed and delivered in the
         // mapped-back form.
@@ -281,7 +307,8 @@ impl UDPMuxDefault {
                 .lock()
                 .unwrap()
                 .insert(peer_addr, Arc::downgrade(&conn));
-            conn.deliver(data, peer_addr, dst_ip);
+            conn.learned.lock().unwrap().insert(peer_addr);
+            conn.deliver(data, peer_addr, dst_ip, ecn);
             return;
         }
 
@@ -292,7 +319,7 @@ impl UDPMuxDefault {
             .get(&peer_addr)
             .and_then(Weak::upgrade)
         {
-            conn.deliver(data, peer_addr, dst_ip);
+            conn.deliver(data, peer_addr, dst_ip, ecn);
             return;
         }
 
@@ -323,22 +350,22 @@ impl UDPMux for UDPMuxDefault {
                 format!("ICE ufrag {ufrag:?} is already registered on the UDP mux"),
             ));
         }
-        Ok(self.insert_conn(&mut conns, ufrag))
-    }
 
-    fn get_conn(&self, ufrag: &str) -> io::Result<Arc<dyn AsyncUdpSocket>> {
-        if self.closed.load(Ordering::Acquire) {
-            return Err(io::Error::new(
-                io::ErrorKind::BrokenPipe,
-                "udp mux is closed",
-            ));
-        }
-
-        let mut conns = self.conns.lock().unwrap();
-        if let Some(conn) = conns.get(ufrag) {
-            return Ok(conn.clone());
-        }
-        Ok(self.insert_conn(&mut conns, ufrag))
+        let (tx, rx) = async_channel::bounded(MUXED_CONN_CHANNEL_CAPACITY);
+        let conn = Arc::new(UdpMuxedConn {
+            ufrag: ufrag.to_owned(),
+            local_addr: self.local_addr,
+            socket: Arc::clone(&self.socket),
+            address_map: Arc::clone(&self.address_map),
+            pool: Arc::clone(&self.pool),
+            rx: Mutex::new(Box::pin(rx)),
+            tx,
+            learned: Mutex::new(HashSet::new()),
+            me: OnceLock::new(),
+        });
+        let _ = conn.me.set(Arc::downgrade(&conn));
+        conns.insert(ufrag.to_owned(), conn.clone());
+        Ok(conn)
     }
 
     fn remove_conn(&self, ufrag: &str) {
@@ -348,10 +375,25 @@ impl UDPMux for UDPMuxDefault {
             // peer-address routes. Entries are matched by identity, not address value, so a
             // route a *newer* connection has since taken over is left alone.
             conn.close();
-            self.address_map
-                .lock()
-                .unwrap()
-                .retain(|_, route| route.upgrade().is_none_or(|c| !Arc::ptr_eq(&c, &conn)));
+            let mut purged = Vec::new();
+            self.address_map.lock().unwrap().retain(|addr, route| {
+                let keep = route.upgrade().is_none_or(|c| !Arc::ptr_eq(&c, &conn));
+                if !keep {
+                    purged.push(*addr);
+                }
+                keep
+            });
+            // A surviving connection that learnt one of the purged addresses earlier must
+            // re-register it on its next send — its set saying "already claimed" would
+            // otherwise keep the route absent.
+            if !purged.is_empty() {
+                for conn in self.conns.lock().unwrap().values() {
+                    let mut learned = conn.learned.lock().unwrap();
+                    for addr in &purged {
+                        learned.remove(addr);
+                    }
+                }
+            }
         }
     }
 
@@ -363,6 +405,8 @@ impl UDPMux for UDPMuxDefault {
             conn.close();
         }
         self.address_map.lock().unwrap().clear();
+        // The reader parks in the socket's poll_recv; wake it so the task actually ends.
+        self.closed_notify.notify_waiters();
     }
 }
 
@@ -370,7 +414,9 @@ impl UDPMux for UDPMuxDefault {
 ///
 /// `None` for anything that is not a decodable message with a UTF-8 USERNAME: routing must
 /// never guess, so undecodable traffic simply goes nowhere.
-fn stun_username(data: &[u8]) -> Option<String> {
+///
+/// Shared with the TCP mux, whose first-frame peek demultiplexes by the same attribute.
+pub(crate) fn stun_username(data: &[u8]) -> Option<String> {
     let mut message = StunMessage::new();
     message.unmarshal_binary(data).ok()?;
     let username = message.get(ATTR_USERNAME).ok()?;
@@ -381,7 +427,7 @@ fn stun_username(data: &[u8]) -> Option<String> {
 }
 
 /// The v6 dual-stack view of an IPv4 peer is the v4-mapped address; connections and ICE
-/// candidates both speak plain IPv4, so routes are keyed by the mapped-back form.
+/// candidates both speak plain IPv4, so routes are keyed and delivered in the mapped-back form.
 fn normalize_inbound_addr(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
@@ -400,14 +446,19 @@ struct UdpMuxedConn {
     local_addr: SocketAddr,
     socket: Arc<dyn AsyncUdpSocket>,
     address_map: Arc<Mutex<HashMap<SocketAddr, Weak<UdpMuxedConn>>>>,
+    pool: Arc<BufPool>,
     /// `&self` polling needs the receiver behind a lock; async-channel's waker registration
     /// survives the guard's drop, so a `Pending` here still wakes the poller. Boxed and pinned
     /// because `async_channel::Receiver` is `!Unpin`.
     rx: Mutex<Pin<Box<async_channel::Receiver<MuxedPacket>>>>,
     /// Kept so `close` can hang up the queue (dropping it closes the channel).
     tx: async_channel::Sender<MuxedPacket>,
+    /// Peer addresses this connection has already claimed in the mux's address map. The
+    /// steady-state send path checks only this (uncontended) set; the shared map is locked
+    /// solely when a route actually changes.
+    learned: Mutex<HashSet<SocketAddr>>,
     /// Self-reference for registering peer-address routes on send, installed by
-    /// [`UDPMuxDefault::get_conn`] once the `Arc` exists.
+    /// [`UDPMuxDefault::register_conn`] once the `Arc` exists.
     me: OnceLock<Weak<UdpMuxedConn>>,
 }
 
@@ -421,21 +472,35 @@ impl fmt::Debug for UdpMuxedConn {
 }
 
 impl UdpMuxedConn {
-    fn deliver(&self, data: &[u8], peer_addr: SocketAddr, dst_ip: Option<IpAddr>) {
+    fn deliver(
+        &self,
+        data: &[u8],
+        peer_addr: SocketAddr,
+        dst_ip: Option<IpAddr>,
+        ecn: Option<crate::runtime::EcnCodepoint>,
+    ) {
+        let mut buf = self.pool.get();
+        let len = data.len().min(buf.len());
+        buf[..len].copy_from_slice(&data[..len]);
         let packet = MuxedPacket {
-            data: Box::from(data),
+            data: buf,
+            len,
             peer_addr,
             dst_ip,
+            ecn,
         };
         match self.tx.try_send(packet) {
             Ok(()) => {}
-            Err(async_channel::TrySendError::Full(_)) => {
+            Err(async_channel::TrySendError::Full(packet)) => {
                 trace!(
                     "udp_mux: connection {} is not keeping up, dropping datagram from {peer_addr}",
                     self.ufrag
                 );
+                self.pool.put(packet.data);
             }
-            Err(async_channel::TrySendError::Closed(_)) => {}
+            Err(async_channel::TrySendError::Closed(packet)) => {
+                self.pool.put(packet.data);
+            }
         }
     }
 
@@ -450,14 +515,18 @@ impl AsyncUdpSocket for UdpMuxedConn {
     }
 
     fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
-        // Learn the route before sending, so a response that beats our return already knows
-        // where to go. A newer connection claiming the address wins (see `route`).
-        if let Some(me) = self.me.get().cloned() {
-            self.address_map
-                .lock()
-                .unwrap()
-                .insert(normalize_inbound_addr(transmit.destination), me);
+        // Learn the route on first contact with a peer, so a response that beats our return
+        // already knows where to go. Steady-state sends only touch the per-connection set —
+        // the shared map is written when routes change, not per packet.
+        let dest = normalize_inbound_addr(transmit.destination);
+        let mut learned = self.learned.lock().unwrap();
+        if !learned.contains(&dest) {
+            if let Some(me) = self.me.get().cloned() {
+                self.address_map.lock().unwrap().insert(dest, me);
+            }
+            learned.insert(dest);
         }
+        drop(learned);
         self.socket.poll_send(cx, transmit)
     }
 
@@ -470,15 +539,15 @@ impl AsyncUdpSocket for UdpMuxedConn {
         let mut rx = self.rx.lock().unwrap();
         match rx.as_mut().poll_next(cx) {
             Poll::Ready(Some(packet)) => {
-                let n = packet.data.len().min(bufs[0].len());
-                if n < packet.data.len() {
+                if packet.len > bufs[0].len() {
                     warn!(
                         "udp_mux: truncating {}-byte datagram from {} to {} bytes",
-                        packet.data.len(),
+                        packet.len,
                         packet.peer_addr,
-                        n
+                        bufs[0].len()
                     );
                 }
+                let n = packet.len.min(bufs[0].len());
                 bufs[0][..n].copy_from_slice(&packet.data[..n]);
                 let m = &mut meta[0];
                 m.addr = packet.peer_addr;
@@ -486,8 +555,9 @@ impl AsyncUdpSocket for UdpMuxedConn {
                 // One datagram per read, so the buffer's stride is its length; GRO splitting
                 // happened in the mux's reader already.
                 m.stride = n.max(1);
-                m.ecn = None;
+                m.ecn = packet.ecn;
                 m.dst_ip = packet.dst_ip;
+                self.pool.put(packet.data);
                 Poll::Ready(Ok(1))
             }
             // The mux closed the connection: report the socket gone, like an unplugged NIC.
@@ -562,6 +632,10 @@ mod tests {
             socket,
             conns: Mutex::new(HashMap::new()),
             address_map: Arc::new(Mutex::new(HashMap::new())),
+            pool: Arc::new(BufPool {
+                free: Mutex::new(Vec::new()),
+            }),
+            closed_notify: Arc::new(Notify::new()),
             closed: AtomicBool::new(false),
         })
     }
@@ -618,7 +692,7 @@ mod tests {
         // USERNAME is "local-ufrag:remote-ufrag" from the sender's perspective: the first
         // half names the *receiving* connection.
         let packet = binding_request("aaa:remote");
-        mux.route(&packet, peer(), Some(IpAddr::from([127, 0, 0, 1])));
+        mux.route(&packet, peer(), Some(IpAddr::from([127, 0, 0, 1])), None);
 
         assert_eq!(poll_packet(&conn_b), None, "conn b must see nothing");
         let (data, from, dst_ip) = poll_packet(&conn_a).expect("conn a gets the check");
@@ -628,7 +702,7 @@ mod tests {
 
         // Routing by ufrag also learns the peer address: the next, ufrag-less datagram from
         // the same peer goes straight to the connection without parsing.
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         let (data, _, _) = poll_packet(&conn_a).expect("conn a gets the follow-up");
         assert_eq!(data, b"\x80\x77dtls-not-stun");
         assert_eq!(poll_packet(&conn_b), None);
@@ -643,7 +717,7 @@ mod tests {
         // The connection's first outbound datagram claims the peer address; DTLS/SRTP from
         // that peer — never carrying a ufrag — routes back to it.
         send_to(&conn_b, b"binding response", peer());
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
 
         let (data, _, _) = poll_packet(&conn_b).expect("conn b gets the reply");
         assert_eq!(data, b"\x80\x77dtls-not-stun");
@@ -655,11 +729,11 @@ mod tests {
         let mux = mux();
         let conn_a = mux.register_conn("aaa").unwrap();
 
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         // A STUN check naming a ufrag nobody registered.
-        mux.route(&binding_request("zzz:remote"), peer(), None);
+        mux.route(&binding_request("zzz:remote"), peer(), None, None);
         // Garbage that is not STUN at all.
-        mux.route(&binding_request("aaa:remote")[..10], peer(), None);
+        mux.route(&binding_request("aaa:remote")[..10], peer(), None, None);
 
         assert_eq!(poll_packet(&conn_a), None, "nothing may be routed");
     }
@@ -673,13 +747,13 @@ mod tests {
         let conn_b = mux.register_conn("bbb").unwrap();
 
         send_to(&conn_a, b"outbound", peer());
-        mux.route(&binding_request("bbb:remote"), peer(), None);
+        mux.route(&binding_request("bbb:remote"), peer(), None, None);
 
         // The route has moved: the check itself reached the new connection ...
         let (check, _, _) = poll_packet(&conn_b).expect("conn b gets its own check");
         assert_eq!(check, binding_request("bbb:remote"));
         // ... and media from the peer now goes to it as well.
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         let (data, _, _) = poll_packet(&conn_b).expect("conn b takes over the peer");
         assert_eq!(data, b"\x80\x77dtls-not-stun");
         assert_eq!(poll_packet(&conn_a), None, "the stale route is gone");
@@ -691,9 +765,6 @@ mod tests {
         mux.register_conn("aaa").unwrap();
         let dup = mux.register_conn("aaa");
         assert_eq!(dup.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
-
-        // Re-attaching (the ICE-restart path) is not a duplicate.
-        assert!(mux.get_conn("aaa").is_ok());
     }
 
     #[test]
@@ -706,7 +777,7 @@ mod tests {
         assert!(mux.register_conn("aaa").is_ok(), "the ufrag is free again");
 
         // The freed connection's route is gone with it: nothing routes anywhere now.
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         assert_eq!(poll_packet(&conn_a), None);
     }
 
@@ -722,8 +793,29 @@ mod tests {
         send_to(&conn_b, b"outbound", peer());
         mux.remove_conn("aaa");
 
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         let (data, _, _) = poll_packet(&conn_b).expect("conn b keeps its route");
+        assert_eq!(data, b"\x80\x77dtls-not-stun");
+    }
+
+    #[test]
+    fn remove_conn_lets_a_surviving_previous_owner_reclaim_the_route() {
+        // A owns the route, B takes it over, B is removed: the purge must clear the address
+        // from A's learned set too, or A's next send would skip re-registering a route that
+        // no longer exists.
+        let mux = mux();
+        let conn_a = mux.register_conn("aaa").unwrap();
+        let conn_b = mux.register_conn("bbb").unwrap();
+
+        send_to(&conn_a, b"outbound", peer());
+        send_to(&conn_b, b"outbound", peer()); // b claims the route
+        mux.remove_conn("bbb");
+
+        // A's next send re-claims the route ...
+        send_to(&conn_a, b"outbound again", peer());
+        // ... so peer traffic routes to it again.
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
+        let (data, _, _) = poll_packet(&conn_a).expect("conn a reclaims the route");
         assert_eq!(data, b"\x80\x77dtls-not-stun");
     }
 
@@ -759,12 +851,12 @@ mod tests {
         let conn_a = mux.register_conn("aaa").unwrap();
         let v6_mapped: SocketAddr = "[::ffff:192.0.2.1]:40000".parse().unwrap();
 
-        mux.route(&binding_request("aaa:remote"), v6_mapped, None);
+        mux.route(&binding_request("aaa:remote"), v6_mapped, None, None);
         let (_, from, _) = poll_packet(&conn_a).expect("conn a gets the check");
         assert_eq!(from, peer(), "the conn sees the plain IPv4 address");
 
         // And the learnt route matches the plain form too.
-        mux.route(b"\x80\x77dtls-not-stun", peer(), None);
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         assert!(poll_packet(&conn_a).is_some());
     }
 
