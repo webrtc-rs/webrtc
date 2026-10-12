@@ -229,8 +229,8 @@ fn test_ice_restart_after_turn_credential_rotation_keeps_relay() {
 
         // ── 2. Rotate credentials and restart ICE ─────────────────────────────
         // Same server, same policy, different credential: a pure credential rotation. The
-        // allocation is a 5-tuple resource independent of the credential that created it,
-        // so nothing here should require giving it up.
+        // allocation keeps its original authenticated username (RFC 8656 section 5),
+        // so rotating the configuration must not mutate its client credentials.
         let allocates_before = wire.allocates.load(Ordering::SeqCst);
         assert!(
             allocates_before > 0,
@@ -297,7 +297,7 @@ fn test_ice_restart_after_turn_credential_rotation_keeps_relay() {
         // ── What actually happened on the wire ────────────────────────────────
         // These are the assertions with teeth. The SDP above keeps the stale relay
         // candidate whether or not the re-Allocate succeeded, so only the wire distinguishes
-        // "re-signed the existing allocation" from "tried to re-Allocate and got 437".
+        // "retained the existing allocation" from "tried to re-Allocate and got 437".
         let allocates_after = wire.allocates.load(Ordering::SeqCst) - allocates_before;
         let refreshes = wire.refreshes.load(Ordering::SeqCst);
         let mismatches = wire.alloc_mismatch_437.load(Ordering::SeqCst);
@@ -315,14 +315,13 @@ fn test_ice_restart_after_turn_credential_rotation_keeps_relay() {
         assert_eq!(
             allocates_after, 0,
             "issue #835: {allocates_after} new Allocate(s) after a pure credential rotation. \
-             An allocation is a 5-tuple resource independent of the credential that created \
-             it, so rotating credentials must re-sign the existing allocation, not replace it."
+             The established allocation should retain its original identity until retired."
         );
-        assert!(
-            refreshes > 0,
-            "expected a Refresh carrying the rotated credential; the server only learns the \
-             new credential when the allocation is re-signed"
+        assert_eq!(
+            refreshes, 0,
+            "updating credentials must not trigger a Refresh under a new allocation identity"
         );
+        pc.close().await.unwrap();
     });
 }
 
