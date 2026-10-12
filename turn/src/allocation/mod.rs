@@ -5,6 +5,7 @@ pub mod allocation_manager;
 pub mod channel_bind;
 pub mod five_tuple;
 pub mod permission;
+pub(crate) mod reservation;
 
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
