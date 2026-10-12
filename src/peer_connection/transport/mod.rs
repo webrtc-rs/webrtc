@@ -55,6 +55,7 @@ pub(crate) mod stun_gatherer;
 pub(crate) mod tcp_transport;
 pub(crate) mod turn_relayer;
 
+pub mod tcp_mux;
 pub mod udp_mux;
 
 /// Plain single-datagram UDP receive buffer size (no GRO coalescing).

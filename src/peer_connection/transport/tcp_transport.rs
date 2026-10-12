@@ -232,43 +232,7 @@ impl RTCTcpTransport {
     }
 
     pub(crate) fn gather_candidates(&self) -> Vec<RTCIceCandidateInit> {
-        let mut candidates = Vec::new();
-        for local_addr in self.listeners.keys() {
-            // Gather passive TCP candidate
-            let passive_config = CandidateHostConfig {
-                base_config: CandidateConfig {
-                    network: "tcp".to_owned(),
-                    address: local_addr.ip().to_string(),
-                    port: local_addr.port(),
-                    component: 1,
-                    ..Default::default()
-                },
-                tcp_type: rtc::ice::tcp_type::TcpType::Passive,
-            };
-            if let Ok(candidate) = passive_config.new_candidate_host()
-                && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
-            {
-                candidates.push(candidate_init);
-            }
-
-            // Gather active TCP candidate
-            let active_config = CandidateHostConfig {
-                base_config: CandidateConfig {
-                    network: "tcp".to_owned(),
-                    address: local_addr.ip().to_string(),
-                    port: 9, // Discard port placeholder for active candidates
-                    component: 1,
-                    ..Default::default()
-                },
-                tcp_type: rtc::ice::tcp_type::TcpType::Active,
-            };
-            if let Ok(candidate) = active_config.new_candidate_host()
-                && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
-            {
-                candidates.push(candidate_init);
-            }
-        }
-        candidates
+        tcp_host_candidates(self.listeners.keys().copied())
     }
 
     pub(crate) fn connect(
@@ -310,4 +274,49 @@ impl RTCTcpTransport {
             }));
         }
     }
+}
+
+/// Passive and active host candidates for one set of listen addresses — shared by
+/// [`RTCTcpTransport::gather_candidates`] (per-connection listeners) and the driver's TCP-mux
+/// path (the mux's one listener, expanded per interface).
+pub(crate) fn tcp_host_candidates(
+    addrs: impl IntoIterator<Item = SocketAddr>,
+) -> Vec<RTCIceCandidateInit> {
+    let mut candidates = Vec::new();
+    for local_addr in addrs {
+        // Gather passive TCP candidate
+        let passive_config = CandidateHostConfig {
+            base_config: CandidateConfig {
+                network: "tcp".to_owned(),
+                address: local_addr.ip().to_string(),
+                port: local_addr.port(),
+                component: 1,
+                ..Default::default()
+            },
+            tcp_type: rtc::ice::tcp_type::TcpType::Passive,
+        };
+        if let Ok(candidate) = passive_config.new_candidate_host()
+            && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
+        {
+            candidates.push(candidate_init);
+        }
+
+        // Gather active TCP candidate
+        let active_config = CandidateHostConfig {
+            base_config: CandidateConfig {
+                network: "tcp".to_owned(),
+                address: local_addr.ip().to_string(),
+                port: 9, // Discard port placeholder for active candidates
+                component: 1,
+                ..Default::default()
+            },
+            tcp_type: rtc::ice::tcp_type::TcpType::Active,
+        };
+        if let Ok(candidate) = active_config.new_candidate_host()
+            && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
+        {
+            candidates.push(candidate_init);
+        }
+    }
+    candidates
 }

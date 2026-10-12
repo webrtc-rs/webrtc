@@ -670,7 +670,7 @@ impl UDPMux for UDPMuxDefault {
 /// '/'. The mux routes by the first ':'-separated segment of a STUN USERNAME, so a ufrag with
 /// anything outside the charset could never match — reject it at registration instead of
 /// silently stranding the connection.
-fn validate_ufrag(ufrag: &str) -> io::Result<()> {
+pub(crate) fn validate_ufrag(ufrag: &str) -> io::Result<()> {
     let valid = (4..=256).contains(&ufrag.len())
         && ufrag
             .bytes()

@@ -86,7 +86,7 @@ use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
-use crate::peer_connection::transport::udp_mux;
+use crate::peer_connection::transport::{tcp_mux, udp_mux};
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::Registry;
 
@@ -186,6 +186,7 @@ pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
+    tcp_mux: Option<Arc<dyn tcp_mux::TCPMux>>,
     dedicated_reactor_pool_size: usize,
     data_channel_send_buffer_limit: usize,
     /// Held rather than forwarded immediately, so [`build`](Self::build) can resolve the crypto
@@ -202,6 +203,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             udp_mux: None,
+            tcp_mux: None,
             dedicated_reactor_pool_size: 0,
             setting_engine: SettingEngine::default(),
             // `usize::MAX` = unbounded: no send back-pressure unless the application
@@ -305,6 +307,21 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         self
     }
 
+    /// Shares one ICE-TCP listener across connections instead of binding per connection.
+    ///
+    /// The TCP sibling of [`with_udp_mux`](Self::with_udp_mux), for networks that block UDP:
+    /// the mux owns the listener and dispatches each accepted stream to its connection by the
+    /// ufrag in its first STUN frame. Only the passive side is multiplexed — active ICE-TCP
+    /// connects are outbound dials and work with or without a mux. See [`tcp_mux`].
+    ///
+    /// Mutually exclusive with [`with_tcp_addrs`](Self::with_tcp_addrs), and combinable with
+    /// [`with_udp_mux`](Self::with_udp_mux): one connection may ride both muxes, and the same
+    /// credentials (pinned or agent-generated) are registered on both.
+    pub fn with_tcp_mux(mut self, tcp_mux: Arc<dyn tcp_mux::TCPMux>) -> Self {
+        self.tcp_mux = Some(tcp_mux);
+        self
+    }
+
     /// Set the size of the dedicated reactor pool used. Defaults to `0`, means disabled.
     /// Values above `1024` are clamped down to it.
     ///
@@ -393,8 +410,10 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         // the driver here and registered eagerly at the first bind — a duplicate pinned ufrag
         // then fails this `build` the way a failed bind does. A half-pinned pair is treated as
         // unpinned: the agent fills the empty half with a random value and the full pair is
-        // picked up from the local description like generated credentials.
-        let mux_pinned_credentials = if self.udp_mux.is_some() {
+        // picked up from the local description like generated credentials. One pinned pair
+        // covers both muxes.
+        let muxed = self.udp_mux.is_some() || self.tcp_mux.is_some();
+        let mux_pinned_credentials = if muxed {
             let (ufrag, pwd) = self.setting_engine.ice_credentials();
             if !ufrag.is_empty() && !pwd.is_empty() {
                 Some((ufrag.to_owned(), pwd.to_owned()))
@@ -404,18 +423,22 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         } else {
             None
         };
-        let udp_mux = if let Some(mux) = self.udp_mux {
-            if !self.udp_addrs.is_empty() {
-                return Err(Error::Other(
-                    "`with_udp_addrs` and `with_udp_mux` are mutually exclusive: the mux owns \
-                     the socket, there is nothing left to bind"
-                        .to_owned(),
-                ));
-            }
-            Some(mux)
-        } else {
-            None
-        };
+        if self.udp_mux.is_some() && !self.udp_addrs.is_empty() {
+            return Err(Error::Other(
+                "`with_udp_addrs` and `with_udp_mux` are mutually exclusive: the mux owns \
+                 the socket, there is nothing left to bind"
+                    .to_owned(),
+            ));
+        }
+        if self.tcp_mux.is_some() && !self.tcp_addrs.is_empty() {
+            return Err(Error::Other(
+                "`with_tcp_addrs` and `with_tcp_mux` are mutually exclusive: the mux owns \
+                 the listener, there is nothing left to bind"
+                    .to_owned(),
+            ));
+        }
+        let udp_mux = self.udp_mux;
+        let tcp_mux = self.tcp_mux;
 
         let mdns_mode = self.setting_engine.multicast_dns().mode;
         let turn_allocation_refresh_interval_cap =
@@ -453,6 +476,7 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
             self.udp_addrs,
             self.tcp_addrs,
             udp_mux,
+            tcp_mux,
             mux_pinned_credentials,
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
@@ -1049,6 +1073,7 @@ impl PeerConnectionImpl {
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
+        tcp_mux: Option<Arc<dyn tcp_mux::TCPMux>>,
         mux_pinned_credentials: Option<(String, String)>,
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
@@ -1110,6 +1135,7 @@ impl PeerConnectionImpl {
                 udp_addrs,
                 tcp_addrs,
                 udp_mux,
+                tcp_mux,
                 mux_pinned_credentials,
                 mdns_mode,
                 ice_servers,
