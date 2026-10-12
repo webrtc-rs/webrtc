@@ -7,10 +7,10 @@ use std::net::SocketAddr;
 use tokio::time::Instant;
 
 //  Channel number:
-//    0x4000 through 0x7FFF: These values are the allowed channel
-//    numbers (16,383 possible values).
+//    0x4000 through 0x4FFF: These values are the allowed channel
+//    numbers (4,096 possible values).
 const MIN_CHANNEL_NUMBER: u16 = 0x4000;
-const MAX_CHANNEL_NUMBER: u16 = 0x7fff;
+const MAX_CHANNEL_NUMBER: u16 = 0x4fff;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) enum BindingState {
@@ -76,8 +76,18 @@ impl BindingManager {
     }
 
     pub(crate) fn create(&mut self, addr: SocketAddr) -> Option<&Binding> {
+        // RFC 8656 section 12 forbids assigning a channel that is still bound.
+        let mut available = None;
+        for _ in MIN_CHANNEL_NUMBER..=MAX_CHANNEL_NUMBER {
+            let candidate = self.assign_channel_number();
+            if !self.chan_map.contains_key(&candidate) {
+                available = Some(candidate);
+                break;
+            }
+        }
+        let number = available?;
         let b = Binding {
-            number: self.assign_channel_number(),
+            number,
             st: BindingState::Idle,
             addr,
             refreshed_at: Instant::now(),
