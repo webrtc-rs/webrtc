@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn static_credentials_prepare_unicode_and_reject_collisions() -> Result<()> {
+    let auth = StaticAuthHandler::new(BTreeMap::from([(
+        "cafe\u{301}".into(),
+        "pa\u{a0}ss".into(),
+    )]))?;
+    let addr = "127.0.0.1:1234".parse()?;
+    assert_eq!(
+        auth.auth_handle("caf\u{e9}", "re\u{301}alm", addr)?,
+        generate_auth_key("caf\u{e9}", "r\u{e9}alm", "pa ss")
+    );
+    assert_eq!(auth.password_algorithms(), vec![2, 1]);
+    assert!(auth
+        .auth_handle_algorithm("caf\u{e9}", "realm", addr, 3)
+        .is_err());
+    assert!(
+        StaticAuthHandler::new(BTreeMap::from([("bad\nuser".into(), "password".into())])).is_err()
+    );
+    assert!(StaticAuthHandler::new(BTreeMap::from([
+        ("caf\u{e9}".into(), "first".into()),
+        ("cafe\u{301}".into(), "second".into()),
+    ]))
+    .is_err());
+    Ok(())
+}
+
+#[test]
+fn realm_preparation_checks_character_length_and_normalization() -> Result<()> {
+    assert_eq!(prepare_realm("re\u{301}alm")?, "r\u{e9}alm");
+    assert!(prepare_realm("").is_err());
+    assert!(prepare_realm(&"\u{e9}".repeat(127)).is_ok());
+    assert!(prepare_realm(&"\u{e9}".repeat(128)).is_err());
+    Ok(())
+}
+
+#[test]
 fn test_lt_cred() -> Result<()> {
     let username = "1599491771";
     let shared_secret = "foobar";

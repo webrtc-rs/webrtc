@@ -26,7 +26,7 @@ async fn test_allocation_lifetime_parsing() -> Result<()> {
 
     let lifetime_duration = allocation_lifetime(&m);
     assert_eq!(
-        lifetime_duration, lifetime.0,
+        lifetime_duration, DEFAULT_LIFETIME,
         "Expect lifetime_duration is {lifetime}, but {lifetime_duration:?}"
     );
 
@@ -42,8 +42,8 @@ async fn test_allocation_lifetime_overflow() -> Result<()> {
 
     let lifetime_duration = allocation_lifetime(&m2);
     assert_eq!(
-        lifetime_duration, DEFAULT_LIFETIME,
-        "Expect lifetime_duration is {DEFAULT_LIFETIME:?}, but {lifetime_duration:?}"
+        lifetime_duration, MAXIMUM_ALLOCATION_LIFETIME,
+        "The configured maximum caps the requested lifetime"
     );
 
     Ok(())
@@ -73,6 +73,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
     let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1")?, 5000);
 
     let mut r = Request::new(l, socket, allocation_manager, Arc::new(TestAuthHandler {}));
+    r.realm = STATIC_KEY.into();
 
     {
         let mut nonces = r.nonces.lock().await;
@@ -103,10 +104,10 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
 
     let mut m = Message::new();
     Lifetime::default().add_to(&mut m)?;
-    MessageIntegrity(STATIC_KEY.as_bytes().to_vec()).add_to(&mut m)?;
     Nonce::new(ATTR_NONCE, STATIC_KEY.to_owned()).add_to(&mut m)?;
     Realm::new(ATTR_REALM, STATIC_KEY.to_owned()).add_to(&mut m)?;
-    Username::new(ATTR_USERNAME, STATIC_KEY.to_owned()).add_to(&mut m)?;
+    Username::new(ATTR_USERNAME, "user".to_owned()).add_to(&mut m)?;
+    MessageIntegrity(STATIC_KEY.as_bytes().to_vec()).add_to(&mut m)?;
 
     r.handle_refresh_request(&m).await?;
     assert!(r
@@ -136,6 +137,7 @@ async fn test_allocate_retransmission_replays_success() -> Result<()> {
         allocation_manager.clone(),
         Arc::new(TestAuthHandler {}),
     );
+    request.realm = "realm".into();
     request
         .nonces
         .lock()

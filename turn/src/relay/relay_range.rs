@@ -45,11 +45,18 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         }
     }
 
+    fn supports_family(&self, use_ipv4: bool) -> bool {
+        self.relay_address.is_ipv4() == use_ipv4
+    }
+
     async fn allocate_conn(
         &self,
         use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
+        if !self.supports_family(use_ipv4) {
+            return Err(Error::ErrInvalidRequestedFamilyValue);
+        }
         let max_retries = if self.max_retries == 0 {
             DEFAULT_MAX_RETRIES
         } else {
@@ -57,6 +64,11 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         };
 
         if requested_port != 0 {
+            if !(self.min_port..=self.max_port).contains(&requested_port) {
+                return Err(Error::Other(
+                    "requested relay port is outside the configured range".into(),
+                ));
+            }
             let addr = self
                 .net
                 .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
@@ -86,3 +98,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         Err(Error::ErrMaxRetriesExceeded)
     }
 }
+
+#[cfg(test)]
+mod relay_range_test;
