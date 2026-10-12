@@ -19,7 +19,7 @@ pub struct EvenPort {
     /// `reserve_port` means that the server is requested to reserve
     /// the next-higher port number (on the same IP address)
     /// for a subsequent allocation.
-    reserve_port: bool,
+    pub reserve_port: bool,
 }
 
 impl fmt::Display for EvenPort {

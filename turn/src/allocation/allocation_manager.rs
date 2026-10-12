@@ -8,6 +8,7 @@ use stun::textattrs::Username;
 use tokio::sync::mpsc;
 use util::Conn;
 
+use super::reservation::{Relay, Reservations};
 use super::*;
 use crate::error::*;
 use crate::relay::*;
@@ -22,6 +23,8 @@ pub struct ManagerConfig {
 pub struct Manager {
     allocations: Arc<Mutex<AllocationMap>>,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
+    reserved_relays: Arc<Reservations>,
+    owns_reserved_relays: bool,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
     alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
@@ -29,9 +32,20 @@ pub struct Manager {
 impl Manager {
     /// Creates a new [`Manager`].
     pub fn new(config: ManagerConfig) -> Self {
+        let mut manager = Self::with_reservations(config, Arc::new(Reservations::default()));
+        manager.owns_reserved_relays = true;
+        manager
+    }
+
+    pub(crate) fn with_reservations(
+        config: ManagerConfig,
+        reserved_relays: Arc<Reservations>,
+    ) -> Self {
         Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
+            reserved_relays,
+            owns_reserved_relays: false,
             relay_addr_generator: config.relay_addr_generator,
             alloc_close_notify: config.alloc_close_notify,
         }
@@ -39,6 +53,9 @@ impl Manager {
 
     /// Closes this [`manager`] and closes all [`Allocation`]s it manages.
     pub async fn close(&self) -> Result<()> {
+        if self.owns_reserved_relays {
+            self.reserved_relays.clear().await;
+        }
         let allocations = self.allocations.lock().await;
         for a in allocations.values() {
             a.close().await?;
@@ -102,6 +119,31 @@ impl Manager {
             .relay_addr_generator
             .allocate_conn(use_ipv4, requested_port)
             .await?;
+        self.create_allocation_with_relay(
+            five_tuple,
+            turn_socket,
+            lifetime,
+            username,
+            (relay_socket, relay_addr),
+        )
+        .await
+    }
+
+    pub(crate) async fn create_allocation_with_relay(
+        &self,
+        five_tuple: FiveTuple,
+        turn_socket: Arc<dyn Conn + Send + Sync>,
+        lifetime: Duration,
+        username: Username,
+        relay: Relay,
+    ) -> Result<Arc<Allocation>> {
+        if lifetime.is_zero() {
+            return Err(Error::ErrLifetimeZero);
+        }
+        if self.get_allocation(&five_tuple).await.is_some() {
+            return Err(Error::ErrDupeFiveTuple);
+        }
+        let (relay_socket, relay_addr) = relay;
         let mut a = Allocation::new(
             turn_socket,
             relay_socket,
@@ -123,6 +165,52 @@ impl Manager {
         }
 
         Ok(a)
+    }
+
+    pub(crate) async fn allocate_relay(&self, use_ipv4: bool) -> Result<Relay> {
+        self.relay_addr_generator.allocate_conn(use_ipv4, 0).await
+    }
+
+    /// Keep the actual odd-port socket bound until consumed or expired.
+    pub(crate) async fn allocate_even_relay(
+        &self,
+        use_ipv4: bool,
+        reserve: bool,
+    ) -> Result<(Relay, Option<Vec<u8>>)> {
+        for _ in 0..128 {
+            let relay = self.allocate_relay(use_ipv4).await?;
+            let port = relay.1.port();
+            if port % 2 != 0 {
+                let _ = relay.0.close().await;
+                continue;
+            }
+            if !reserve {
+                return Ok((relay, None));
+            }
+            let odd = match self
+                .relay_addr_generator
+                .allocate_conn(use_ipv4, port + 1)
+                .await
+            {
+                Ok(odd) => odd,
+                Err(_) => {
+                    let _ = relay.0.close().await;
+                    continue;
+                }
+            };
+            if odd.1.ip() != relay.1.ip() || odd.1.port() != port + 1 {
+                let _ = odd.0.close().await;
+                let _ = relay.0.close().await;
+                continue;
+            }
+            let token = self.reserved_relays.insert(odd).await;
+            return Ok((relay, Some(token)));
+        }
+        Err(Error::ErrMaxRetriesExceeded)
+    }
+
+    pub(crate) async fn take_reserved_relay(&self, token: &[u8]) -> Option<Relay> {
+        self.reserved_relays.take(token).await
     }
 
     /// Removes an [`Allocation`].
