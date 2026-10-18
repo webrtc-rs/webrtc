@@ -440,9 +440,15 @@ impl RTCTurnRelayer {
 
                 if over_tcp {
                     // One connection per server and address family: its source address is
-                    // the kernel's choice and has nothing to do with the UDP sockets.
-                    let mut families: Vec<bool> =
-                        self.local_addrs.iter().map(SocketAddr::is_ipv4).collect();
+                    // the kernel's choice and has nothing to do with the UDP sockets. They
+                    // still say which families this host has, so dial those — unless there
+                    // are none, as on a peer built with `with_tcp_addrs` alone, and then
+                    // the server's own addresses are the only word on what to try.
+                    let mut families: Vec<bool> = if self.local_addrs.is_empty() {
+                        resolved_addrs.iter().map(SocketAddr::is_ipv4).collect()
+                    } else {
+                        self.local_addrs.iter().map(SocketAddr::is_ipv4).collect()
+                    };
                     families.sort_unstable();
                     families.dedup();
                     for is_ipv4 in families {
@@ -1464,6 +1470,34 @@ mod tests {
                     .iter()
                     .any(|e| matches!(e, RTCTurnRelayEventOut::TurnGatheringComplete)),
                 "and gathering still finishes rather than hanging on a client that never was"
+            );
+        });
+    }
+
+    /// A peer with no UDP sockets at all — TLS-only egress, `with_tcp_addrs` and nothing
+    /// else — still reaches a TURN server over TCP. The families to dial come from the
+    /// server when there is no UDP socket to take them from.
+    #[test]
+    fn a_peer_with_no_udp_sockets_still_connects_over_tcp() {
+        futures::executor::block_on(async {
+            let mut relayer = RTCTurnRelayer::new(
+                vec![],
+                vec![RTCIceServer {
+                    urls: vec![format!("turn:{}?transport=tcp", turn_server())],
+                    username: "user".to_owned(),
+                    credential: "pass".to_owned(),
+                }],
+                RTCIceTransportPolicy::Relay,
+                None,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+            );
+            relayer.gather().await.expect("gather");
+            assert!(
+                events(&mut relayer)
+                    .iter()
+                    .any(|e| matches!(e, RTCTurnRelayEventOut::ConnectTcp { .. })),
+                "the host is asked for a connection it is able to make"
             );
         });
     }
