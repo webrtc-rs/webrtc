@@ -157,6 +157,9 @@ impl Runtime for SmolRuntime {
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
             let read_io = ::smol::Async::<std::net::TcpStream>::connect(remote_addr).await?;
+            // Each packet is its own small write on this stream, so Nagle would hold one
+            // back until the last was acknowledged.
+            read_io.get_ref().set_nodelay(true)?;
             let write_io = ::smol::Async::new(read_io.get_ref().try_clone()?)?;
             let local_addr = read_io.get_ref().local_addr()?;
             let peer_addr = read_io.get_ref().peer_addr()?;
@@ -416,6 +419,19 @@ impl AsyncTcpStream for TcpStream {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    /// The same for smol: see the tokio runtime's test for why this matters.
+    #[test]
+    fn a_connected_stream_has_nagle_off() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a listener");
+        let addr = listener.local_addr().expect("its address");
+        let stream = ::smol::block_on(SmolRuntime.connect_tcp(addr)).expect("the connection");
+        let local_addr = stream.local_addr().expect("its local address");
+        assert!(
+            crate::runtime::nagle_is_off(local_addr),
+            "TCP_NODELAY is set on the connection itself"
+        );
+    }
 
     /// A connect whose handshake is still in flight must yield, not block the executor.
     #[test]
