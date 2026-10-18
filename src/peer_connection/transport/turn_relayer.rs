@@ -298,7 +298,10 @@ impl RTCTurnRelayer {
             return Ok(None);
         }
 
-        let mut client = TurnClient::new(
+        // Everything from here on is a way out of this function, and the pending entry is
+        // already gone: an early `?` would leave gathering waiting for a candidate that is
+        // never coming. Each failure settles it first.
+        let mut client = match TurnClient::new(
             TurnClientConfig {
                 stun_serv_addr: four_tuple.peer_addr.to_string(),
                 turn_serv_addr: four_tuple.peer_addr.to_string(),
@@ -313,8 +316,28 @@ impl RTCTurnRelayer {
                 allocation_refresh_interval_cap: self.allocation_refresh_interval_cap,
             },
             Arc::clone(&self.crypto_provider),
-        )?;
-        let allocate_tid = client.allocate(self.runtime.now())?;
+        ) {
+            Ok(client) => client,
+            Err(err) => {
+                warn!(
+                    "TURN client for the connection to {} could not be built: {}",
+                    pending.url, err
+                );
+                self.maybe_emit_gathering_complete();
+                return Err(err);
+            }
+        };
+        let allocate_tid = match client.allocate(self.runtime.now()) {
+            Ok(allocate_tid) => allocate_tid,
+            Err(err) => {
+                warn!(
+                    "TURN allocation over TCP to {} could not be started: {}",
+                    pending.url, err
+                );
+                self.maybe_emit_gathering_complete();
+                return Err(err);
+            }
+        };
         debug!(
             "TURN allocation started over TCP from {} to {} via {}",
             four_tuple.local_addr, four_tuple.peer_addr, pending.url
@@ -1017,7 +1040,7 @@ mod tests {
     };
     use rtc::stun::textattrs::{Nonce, Realm};
     use rtc::stun::xoraddr::XorMappedAddress;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     fn build_binding_success(transaction_id: TransactionId) -> StunMessage {
         let mut msg = StunMessage::new();
@@ -1412,6 +1435,36 @@ mod tests {
                 "an answer to a connect nobody is waiting for is not kept"
             );
             assert!(relayer.poll_write().is_none());
+        });
+    }
+
+    /// Gathering has to end however the connection turns out. Everything after the pending
+    /// entry is dropped is a path out of this function, and an early `?` there would leave
+    /// the relayer waiting for a candidate that is never coming — the peer stays in
+    /// Gathering forever, with one line in the log to say why.
+    #[test]
+    fn a_client_that_cannot_be_built_still_completes_gathering() {
+        futures::executor::block_on(async {
+            let mut relayer = tcp_relayer(&format!("turn:{}?transport=tcp", turn_server()));
+            relayer.gather().await.expect("gather");
+            let id = connect_id(&mut relayer);
+
+            // A connection whose ends disagree on address family: the client's own
+            // constructor resolves the server for the local family and refuses this.
+            let mismatched = FourTuple {
+                local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 40001),
+                peer_addr: SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 3478),
+            };
+            assert!(
+                relayer.on_tcp_connected(id, Ok(mismatched)).is_err(),
+                "the caller hears that this connection came to nothing"
+            );
+            assert!(
+                events(&mut relayer)
+                    .iter()
+                    .any(|e| matches!(e, RTCTurnRelayEventOut::TurnGatheringComplete)),
+                "and gathering still finishes rather than hanging on a client that never was"
+            );
         });
     }
 
