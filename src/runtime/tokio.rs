@@ -171,6 +171,9 @@ impl Runtime for TokioRuntime {
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
             let stream = ::tokio::net::TcpStream::connect(remote_addr).await?;
+            // Each packet is its own small write on this stream, so Nagle would hold one
+            // back until the last was acknowledged.
+            stream.set_nodelay(true)?;
             let local_addr = stream.local_addr()?;
             let peer_addr = stream.peer_addr()?;
             let (read_half, write_half) = stream.into_split();
@@ -422,5 +425,31 @@ impl AsyncTcpStream for TcpStream {
 
     fn peer_addr(&self) -> io::Result<SocketAddr> {
         Ok(self.peer_addr)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    /// Every media and data packet now crosses a TURN TCP connection as its own small
+    /// write. With Nagle on, each one waits for the previous ACK: tens of milliseconds
+    /// of added latency on exactly the networks that force TCP in the first place.
+    #[test]
+    fn a_connected_stream_has_nagle_off() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a listener");
+        let addr = listener.local_addr().expect("its address");
+        let runtime = ::tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a tokio runtime");
+        let stream = runtime
+            .block_on(TokioRuntime.connect_tcp(addr))
+            .expect("the connection");
+        let local_addr = stream.local_addr().expect("its local address");
+        assert!(
+            crate::runtime::nagle_is_off(local_addr),
+            "TCP_NODELAY is set on the connection itself"
+        );
     }
 }
