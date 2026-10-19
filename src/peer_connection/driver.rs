@@ -726,14 +726,6 @@ where
             self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
         }
 
-        let conn = match &self.mux_conn {
-            // A rebind (ICE restart) re-uses the existing registration; pinned credentials
-            // keep the ufrag stable, so the conn never changes.
-            Some(conn) => conn.clone(),
-            // First bind registers strictly: a duplicate ufrag is a configuration error, and
-            // failing here reports it out of `build()` like a failed socket bind.
-            None => mux.register_conn(ufrag)?,
-        };
         let mux_addr = mux.local_addr()?;
 
         // A wildcard listen means "every interface of that family": expand it into one
@@ -749,6 +741,32 @@ where
                 enumerated: false,
             });
         }
+
+        // The unmuxed fallback keeps the wildcard so a relay can still carry the connection.
+        // A muxed connection gathers host candidates only, so a lone `0.0.0.0:port` candidate
+        // leaves it with nothing a peer can reach.
+        if binds.iter().all(|bind| bind.addr.ip().is_unspecified()) {
+            let message = format!(
+                "UDP mux on {mux_addr} has no usable interface to advertise; a muxed \
+                 connection gathers host candidates only"
+            );
+            if self.mux_conn.is_none() {
+                return Err(Error::Other(message));
+            }
+            warn!("{message}");
+        }
+
+        // Registered only after everything above can no longer fail: `Drop` deregisters only
+        // when `mux_conn` is set, so an error between registering and setting it would leave
+        // the ufrag routed to a conn nobody reads.
+        let conn = match &self.mux_conn {
+            // A rebind (ICE restart) re-uses the existing registration; pinned credentials
+            // keep the ufrag stable, so the conn never changes.
+            Some(conn) => conn.clone(),
+            // First bind registers strictly: a duplicate ufrag is a configuration error, and
+            // failing here reports it out of `build()` like a failed socket bind.
+            None => mux.register_conn(ufrag)?,
+        };
 
         if !self.ice_servers.is_empty() {
             // First bind is a configuration problem, say it loudly; a rebind is routine.

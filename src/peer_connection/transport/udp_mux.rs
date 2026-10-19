@@ -175,6 +175,14 @@ pub struct UDPMuxDefault {
     closed: AtomicBool,
 }
 
+impl Drop for UDPMuxDefault {
+    fn drop(&mut self) {
+        // The reader holds the socket (not the mux) and parks in poll_recv: dropping the
+        // last handle must still wake it, or the port stays bound.
+        self.closed_notify.notify_waiters();
+    }
+}
+
 impl fmt::Debug for UDPMuxDefault {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("UDPMuxDefault")
@@ -239,6 +247,11 @@ impl UDPMuxDefault {
         // Created once: the listener observes `close()` from here on, and re-polled each
         // iteration. (Re-creating it per packet would allocate per packet.)
         let mut closed = Box::pin(this.closed_notify.listen().fuse());
+        if this.closed.load(Ordering::Acquire) {
+            // close() ran before we started listening; the notification below is not
+            // guaranteed to be observed a second time.
+            return;
+        }
         drop(this);
 
         loop {
@@ -271,7 +284,10 @@ impl UDPMuxDefault {
                 }
                 Err(err) if is_retryable_socket_recv_error(&err) => continue,
                 Err(err) => {
-                    warn!("udp_mux: socket read failed, reader stops: {err}");
+                    warn!("udp_mux: socket read failed, closing the mux: {err}");
+                    // Hang up every conn so its driver fails instead of waiting forever on a
+                    // socket nobody reads, and refuse new registrations.
+                    UDPMux::close(&*this);
                     return;
                 }
             }
@@ -521,8 +537,20 @@ impl AsyncUdpSocket for UdpMuxedConn {
         let dest = normalize_inbound_addr(transmit.destination);
         let mut learned = self.learned.lock().unwrap();
         if !learned.contains(&dest) {
-            if let Some(me) = self.me.get().cloned() {
-                self.address_map.lock().unwrap().insert(dest, me);
+            if let Some(me) = self.me.get() {
+                let mut address_map = self.address_map.lock().unwrap();
+                // Claim only an unowned route. A send goes wherever the remote's candidates
+                // say, so it must not move a live connection's route: only a STUN check
+                // naming our ufrag may (see `route`). If the owner is removed later,
+                // `remove_conn` clears the address from every learned set and the next send
+                // claims it.
+                let owned_by_other = address_map
+                    .get(&dest)
+                    .and_then(Weak::upgrade)
+                    .is_some_and(|owner| !std::ptr::eq(Arc::as_ptr(&owner), self));
+                if !owned_by_other {
+                    address_map.insert(dest, me.clone());
+                }
             }
             learned.insert(dest);
         }
@@ -760,6 +788,32 @@ mod tests {
     }
 
     #[test]
+    fn a_send_does_not_take_over_a_live_connections_route() {
+        // A send goes wherever the remote's candidates say, so it must not move a route a
+        // live connection owns (a peer could list another client's address and pull its
+        // DTLS/SRTP). Only a STUN check naming our ufrag moves an owned route.
+        let mux = mux();
+        let conn_a = mux.register_conn("aaa").unwrap();
+        let conn_b = mux.register_conn("bbb").unwrap();
+
+        send_to(&conn_a, b"outbound", peer());
+        send_to(&conn_b, b"outbound", peer()); // must NOT steal by sending
+
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
+        let (data, _, _) = poll_packet(&conn_a).expect("the route still belongs to conn a");
+        assert_eq!(data, b"\x80\x77dtls-not-stun");
+        assert_eq!(poll_packet(&conn_b), None);
+
+        // Only a STUN check naming b's ufrag may move it.
+        mux.route(&binding_request("bbb:remote"), peer(), None, None);
+        let (check, _, _) = poll_packet(&conn_b).expect("conn b gets its own check");
+        assert_eq!(check, binding_request("bbb:remote"));
+        mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
+        let (data, _, _) = poll_packet(&conn_b).expect("conn b's check moved the route");
+        assert_eq!(data, b"\x80\x77dtls-not-stun");
+    }
+
+    #[test]
     fn register_conn_refuses_a_duplicate_ufrag() {
         let mux = mux();
         mux.register_conn("aaa").unwrap();
@@ -788,9 +842,10 @@ mod tests {
         let conn_b = mux.register_conn("bbb").unwrap();
 
         send_to(&conn_a, b"outbound", peer());
-        // conn b takes the peer over (its own outbound learn), then conn a is removed:
+        // conn b takes the peer over with its STUN check, then conn a is removed:
         // conn b's route must survive the purge.
-        send_to(&conn_b, b"outbound", peer());
+        mux.route(&binding_request("bbb:remote"), peer(), None, None);
+        let _ = poll_packet(&conn_b);
         mux.remove_conn("aaa");
 
         mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
@@ -808,7 +863,8 @@ mod tests {
         let conn_b = mux.register_conn("bbb").unwrap();
 
         send_to(&conn_a, b"outbound", peer());
-        send_to(&conn_b, b"outbound", peer()); // b claims the route
+        mux.route(&binding_request("bbb:remote"), peer(), None, None); // b takes over
+        let _ = poll_packet(&conn_b);
         mux.remove_conn("bbb");
 
         // A's next send re-claims the route ...
@@ -874,5 +930,53 @@ mod tests {
         assert_eq!(stun_username(&no_username.raw), None);
         assert_eq!(stun_username(b"not stun"), None);
         assert_eq!(stun_username(&binding_request("a:b")[..10]), None);
+    }
+}
+
+#[cfg(all(test, feature = "runtime-tokio"))]
+mod tokio_tests {
+    use super::*;
+
+    /// Dropping the last mux handle must wake the parked reader — the reader holds the
+    /// socket, not the mux, so without the wake the port stays bound.
+    #[test]
+    fn dropping_the_last_handle_releases_the_port() {
+        crate::runtime::TokioRuntime.block_on(Box::pin(async {
+            let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+            let port = socket.local_addr().unwrap().port();
+            let mux = UDPMuxDefault::new(Arc::new(crate::runtime::TokioRuntime), socket).unwrap();
+            drop(mux);
+
+            for _ in 0..200 {
+                if let Ok(sock) = std::net::UdpSocket::bind(("127.0.0.1", port)) {
+                    drop(sock);
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            panic!("the port is still held after dropping the mux");
+        }));
+    }
+
+    /// `close()` wakes the parked reader: once the handle is dropped after the close, the
+    /// port is released.
+    #[test]
+    fn close_then_drop_releases_the_port() {
+        crate::runtime::TokioRuntime.block_on(Box::pin(async {
+            let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+            let port = socket.local_addr().unwrap().port();
+            let mux = UDPMuxDefault::new(Arc::new(crate::runtime::TokioRuntime), socket).unwrap();
+            mux.close();
+            drop(mux);
+
+            for _ in 0..200 {
+                if let Ok(sock) = std::net::UdpSocket::bind(("127.0.0.1", port)) {
+                    drop(sock);
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            panic!("the port is still held after close() + drop");
+        }));
     }
 }
