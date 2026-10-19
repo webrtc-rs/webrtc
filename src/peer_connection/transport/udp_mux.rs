@@ -546,6 +546,12 @@ impl AsyncUdpSocket for UdpMuxedConn {
     }
 
     fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
+        if self.tx.is_closed() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "udp mux connection is closed",
+            )));
+        }
         // Learn the route on first contact with a peer, so a response that beats our return
         // already knows where to go. Steady-state sends only touch the per-connection set —
         // the shared map is written when routes change, not per packet.
@@ -956,6 +962,31 @@ mod tests {
             );
         }
         assert!(mux.register_conn("ccc").is_err());
+    }
+
+    #[test]
+    fn close_clears_all_peer_address_routes() {
+        let mux = mux();
+        let conn = mux.register_conn("aaa").unwrap();
+        send_to(&conn, b"outbound", peer());
+        assert_eq!(mux.address_map.lock().unwrap().len(), 1);
+
+        mux.close();
+
+        assert!(mux.address_map.lock().unwrap().is_empty());
+        let transmit = Transmit {
+            destination: peer(),
+            ecn: None,
+            contents: b"after close",
+            segment_size: None,
+            src_ip: None,
+        };
+        let result = poll_once(|cx| conn.poll_send(cx, &transmit));
+        assert_eq!(
+            result.and_then(|r| r.err()).map(|e| e.kind()),
+            Some(io::ErrorKind::BrokenPipe)
+        );
+        assert!(mux.address_map.lock().unwrap().is_empty());
     }
 
     #[test]
