@@ -155,7 +155,7 @@ pub trait UDPMux: fmt::Debug + Send + Sync + 'static {
 /// The built-in [`UDPMux`]: one bound socket, one reader task, a ufrag table for STUN and a
 /// peer-address table for everything else.
 ///
-/// Dropping the last handle stops the reader; [`UDPMux::close`] does the same explicitly.
+/// Dropping the last handle closes the mux; [`UDPMux::close`] does the same explicitly.
 pub struct UDPMuxDefault {
     socket: Arc<dyn AsyncUdpSocket>,
     local_addr: SocketAddr,
@@ -177,8 +177,15 @@ pub struct UDPMuxDefault {
 
 impl Drop for UDPMuxDefault {
     fn drop(&mut self) {
-        // The reader holds the socket (not the mux) and parks in poll_recv: dropping the
-        // last handle must still wake it, or the port stays bound.
+        // Last-handle drop is an implicit close: hang up the conns (their queues would
+        // otherwise park on a receiver nobody feeds), and wake the reader out of its parked
+        // poll_recv — it holds the socket, not the mux, so without the wake the port stays
+        // bound. The flag matters as much as the notification: a reader that has not created
+        // its listener yet must still observe the shutdown.
+        self.closed.store(true, Ordering::Release);
+        for (_, conn) in self.conns.get_mut().unwrap().drain() {
+            conn.close();
+        }
         self.closed_notify.notify_waiters();
     }
 }
@@ -352,6 +359,10 @@ impl UDPMux for UDPMuxDefault {
     }
 
     fn register_conn(&self, ufrag: &str) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+        let mut conns = self.conns.lock().unwrap();
+        // The closed check must hold the lock: close() sets the flag *before* draining the
+        // table, so a registration that checked the flag unlocked could slip in behind the
+        // drain and sit in a dead mux, never routed to and never hung up.
         if self.closed.load(Ordering::Acquire) {
             return Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
@@ -359,7 +370,6 @@ impl UDPMux for UDPMuxDefault {
             ));
         }
 
-        let mut conns = self.conns.lock().unwrap();
         if conns.contains_key(ufrag) {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -495,12 +505,17 @@ impl UdpMuxedConn {
         dst_ip: Option<IpAddr>,
         ecn: Option<crate::runtime::EcnCodepoint>,
     ) {
-        let mut buf = self.pool.get();
-        let len = data.len().min(buf.len());
-        buf[..len].copy_from_slice(&data[..len]);
+        // Pooled buffers are POOL_BUF_LEN; a bigger datagram gets its own allocation
+        // (`BufPool::put` never pools it back) rather than being truncated.
+        let mut buf = if data.len() > POOL_BUF_LEN {
+            vec![0u8; data.len()].into_boxed_slice()
+        } else {
+            self.pool.get()
+        };
+        buf[..data.len()].copy_from_slice(data);
         let packet = MuxedPacket {
             data: buf,
-            len,
+            len: data.len(),
             peer_addr,
             dst_ip,
             ecn,
@@ -764,6 +779,50 @@ mod tests {
         mux.route(&binding_request("aaa:remote")[..10], peer(), None, None);
 
         assert_eq!(poll_packet(&conn_a), None, "nothing may be routed");
+    }
+
+    /// A datagram bigger than the pooled buffer size gets its own allocation and arrives
+    /// whole — the pool must not become a silent truncation point.
+    #[test]
+    fn an_oversized_datagram_is_delivered_untruncated() {
+        let mux = mux();
+        let conn_a = mux.register_conn("aaa").unwrap();
+
+        let datagram = vec![0x5au8; POOL_BUF_LEN * 2];
+        mux.route(&binding_request("aaa:remote"), peer(), None, None);
+        let _ = poll_packet(&conn_a);
+        mux.route(&datagram, peer(), None, None);
+
+        let mut buf = vec![0u8; POOL_BUF_LEN * 2 + 64];
+        let mut meta = [RecvMeta::default(); 1];
+        let received = poll_once(|cx| {
+            let mut bufs = [IoSliceMut::new(buf.as_mut_slice())];
+            conn_a.poll_recv(cx, &mut bufs, &mut meta)
+        })
+        .and_then(|result| result.ok())
+        .map(|_| buf[..meta[0].len].to_vec());
+        assert_eq!(received, Some(datagram));
+    }
+
+    /// Dropping the last mux handle is an implicit close: every conn's queue hangs up, so a
+    /// parked `poll_recv` reports the socket gone instead of waiting forever.
+    #[test]
+    fn dropping_the_mux_hangs_up_its_conns() {
+        let mux = mux();
+        let conn_a = mux.register_conn("aaa").unwrap();
+        drop(mux);
+
+        let mut buf = [0u8; 64];
+        let mut meta = [RecvMeta::default(); 1];
+        let result = poll_once(|cx| {
+            let mut bufs = [IoSliceMut::new(&mut buf)];
+            conn_a.poll_recv(cx, &mut bufs, &mut meta)
+        });
+        assert_eq!(
+            result.and_then(|r| r.err()).map(|e| e.kind()),
+            Some(io::ErrorKind::BrokenPipe),
+            "a dropped mux's conns report the socket gone"
+        );
     }
 
     #[test]
