@@ -12,7 +12,7 @@ use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::transport::tcp_transport::RTCTcpTransport;
-use crate::peer_connection::transport::udp_mux::UDPMux;
+use crate::peer_connection::transport::udp_mux::{UDPMux, UDPMuxConnHandle};
 use crate::peer_connection::transport::{
     MAX_GSO_BATCH_BYTES, MAX_GSO_SEGMENTS, MIN_GSO_RUN, SocketRecvResult, UDP_RECV_BUF_LEN,
     gro_recv_buf_len, is_retryable_socket_recv_error,
@@ -534,16 +534,20 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     /// than the ones that existed when the connection was built.
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    /// The shared socket this connection rides on, when it is muxed, and the ufrag it routes
-    /// by. ICE credentials are pinned to that ufrag at build time, so it stays valid across
-    /// ICE restarts. Mutually exclusive with binding `udp_addrs` per connection; see
+    /// The shared socket this connection rides on, when it is muxed. Mutually exclusive with
+    /// binding `udp_addrs` per connection; see
     /// [`udp_mux`](crate::peer_connection::transport::udp_mux).
-    udp_mux: Option<(Arc<dyn UDPMux>, String)>,
-    /// The connection's registration in `udp_mux`, registered once at first bind and re-used
-    /// on every rebind. Kept separately from `udp_sockets`: that map keys the conn by every
-    /// advertised interface address for the write path, while the receive loop wants exactly
-    /// one entry for it.
-    mux_conn: Option<Arc<dyn AsyncUdpSocket>>,
+    udp_mux: Option<Arc<dyn UDPMux>>,
+    /// The connection's registration in `udp_mux`, registered once at first bind. On an ICE
+    /// restart the same registration gains the new ufrag via `add_ufrag` — its queue and
+    /// socket view never change. Kept separately from `udp_sockets`: that map keys the conn by
+    /// every advertised interface address for the write path, while the receive loop wants
+    /// exactly one entry for it.
+    mux_conn: Option<(UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>)>,
+    /// The connection's current ICE ufrag on the mux.
+    mux_active_ufrag: Option<String>,
+    /// ufrags a restart rotated away from, still routable until their grace ends.
+    mux_ufrag_expiry: VecDeque<(Instant, String)>,
     mdns_mode: MulticastDnsMode,
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
@@ -569,7 +573,7 @@ where
         inner: Arc<PeerConnectionRef>,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
-        udp_mux: Option<(Arc<dyn UDPMux>, String)>,
+        udp_mux: Option<Arc<dyn UDPMux>>,
         mdns_mode: MulticastDnsMode,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -608,6 +612,8 @@ where
             tcp_addrs,
             udp_mux,
             mux_conn: None,
+            mux_active_ufrag: None,
+            mux_ufrag_expiry: VecDeque::new(),
             mdns_mode,
             ice_servers,
             ice_gather_policy,
@@ -642,8 +648,8 @@ where
     async fn bind_transports(&mut self) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
-        if let Some((mux, ufrag)) = self.udp_mux.clone() {
-            return self.bind_muxed_transports(&mux, &ufrag);
+        if let Some(mux) = self.udp_mux.clone() {
+            return self.bind_muxed_transports(&mux).await;
         }
 
         // Release TURN allocations while the old UDP sockets still exist. Rebinding drops them
@@ -701,9 +707,10 @@ where
     /// shared socket instead of binding a per-connection one.
     ///
     /// No UDP socket is created or destroyed here. The mux's socket predates the connection
-    /// and survives it; registration happens once and the conn is re-used on rebinds — pinned
-    /// credentials keep the ufrag stable across restarts — while the interface expansion below
-    /// is redone, so a network handover still refreshes the advertised candidates (webrtc#874)
+    /// and survives it; registration happens once and the conn is re-used on rebinds — an ICE
+    /// restart adds the freshly rotated ufrag to the existing registration (`add_ufrag`) and
+    /// keeps the previous one for a grace period — while the interface expansion below is
+    /// redone, so a network handover still refreshes the advertised candidates (webrtc#874)
     /// even though the socket itself is shared and constant. TCP listeners follow the same
     /// per-connection rules as in the unmuxed path.
     ///
@@ -716,12 +723,29 @@ where
     /// Gathering is host-only: srflx and relayed gathering would send STUN/TURN traffic to
     /// server addresses shared with every other connection on the mux, whose responses the
     /// mux cannot tell apart. Configured `ice_servers` are therefore dropped here (with a
-    /// warning), matching the restriction Pion documents for `ICEUDPMux`.
-    fn bind_muxed_transports(&mut self, mux: &Arc<dyn UDPMux>, ufrag: &str) -> Result<()> {
+    /// warning), matching the restriction Pion documents for `ICEUDPMux`, and an ICE transport
+    /// policy of `Relay` is rejected — it would gather nothing at all.
+    async fn bind_muxed_transports(&mut self, mux: &Arc<dyn UDPMux>) -> Result<()> {
         let runtime = Arc::clone(&self.inner.runtime);
 
-        // The mDNS socket is independent of the mux (its own multicast socket either way)
-        // and survives rebinds.
+        // Relay-only ICE has nothing to gather on a mux: srflx/relay are dropped (host-only),
+        // and Relay policy skips host candidates, so the connection would gather zero
+        // candidates. Fail loudly instead of returning a connection that can never connect.
+        if self.ice_gather_policy == RTCIceTransportPolicy::Relay {
+            return Err(Error::Other(
+                "a UDP mux gathers host candidates only and cannot satisfy an ICE transport \
+                 policy of Relay; use All/Unspecified, or terminate TURN on the peer side"
+                    .to_owned(),
+            ));
+        }
+
+        // The mDNS socket is per-connection multicast state that must follow the interface
+        // change a rebind exists to serve, exactly like the unmuxed path (webrtc#874): drop the
+        // previous generation's socket before re-joining, so a network handover re-selects the
+        // interface.
+        if self.mux_conn.is_some() {
+            self.mdns_socket = None;
+        }
         if self.mdns_mode != MulticastDnsMode::Disabled && self.mdns_socket.is_none() {
             self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
         }
@@ -756,16 +780,44 @@ where
             warn!("{message}");
         }
 
+        let is_first_bind = self.mux_conn.is_none();
+
+        // Read the connection's *current* ICE credentials from the agent and (re)register
+        // under them. At first bind this is the pair the agent generated; after an ICE restart
+        // it is the freshly rotated pair. Registering from the agent — rather than pinning at
+        // `build()` — is what lets a restart rotate credentials per RFC 8445 while the mux's
+        // routing key tracks the change.
+        let (ufrag, pwd) = {
+            let core = self.inner.core.lock().await;
+            core.local_ice_credentials()
+        };
+
         // Registered only after everything above can no longer fail: `Drop` deregisters only
         // when `mux_conn` is set, so an error between registering and setting it would leave
         // the ufrag routed to a conn nobody reads.
         let conn = match &self.mux_conn {
-            // A rebind (ICE restart) re-uses the existing registration; pinned credentials
-            // keep the ufrag stable, so the conn never changes.
-            Some(conn) => conn.clone(),
+            // A rebind (ICE restart) re-uses the existing registration; the credentials have
+            // rotated, so the new ufrag is added alongside the old one (kept for a grace
+            // period) rather than replacing the conn.
+            Some((handle, conn)) => {
+                if self.mux_active_ufrag.as_deref() != Some(ufrag.as_str()) {
+                    mux.add_ufrag(*handle, &ufrag, &pwd)?;
+                    let old = self.mux_active_ufrag.replace(ufrag.clone());
+                    if let Some(old) = old {
+                        self.mux_ufrag_expiry
+                            .push_back((self.inner.runtime.now() + mux.ufrag_grace(), old));
+                    }
+                }
+                conn.clone()
+            }
             // First bind registers strictly: a duplicate ufrag is a configuration error, and
             // failing here reports it out of `build()` like a failed socket bind.
-            None => mux.register_conn(ufrag)?,
+            None => {
+                let (handle, conn) = mux.register_conn(&ufrag, &pwd)?;
+                self.mux_active_ufrag = Some(ufrag.clone());
+                self.mux_conn = Some((handle, conn.clone()));
+                conn
+            }
         };
 
         if !self.ice_servers.is_empty() {
@@ -774,7 +826,7 @@ where
                 "A muxed connection gathers host candidates only; ignoring {} configured ICE server(s)",
                 self.ice_servers.len()
             );
-            if self.mux_conn.is_none() {
+            if is_first_bind {
                 warn!("{message}");
             } else {
                 debug!("{message}");
@@ -785,7 +837,6 @@ where
         for bind in &binds {
             self.udp_sockets.insert(bind.addr, conn.clone());
         }
-        self.mux_conn = Some(conn);
 
         // TCP listeners are per-connection just like in the unmuxed path — and pinned TCP
         // ports conflict across connections just like pinned UDP ones. The previous
@@ -878,7 +929,7 @@ where
     fn udp_socket_entries(&self) -> Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>, bool)> {
         let mut entries: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>, bool)> =
             match (&self.udp_mux, &self.mux_conn) {
-                (Some((mux, _)), Some(conn)) => match mux.local_addr() {
+                (Some(mux), Some((_, conn))) => match mux.local_addr() {
                     Ok(local_addr) => vec![(local_addr, conn.clone(), true)],
                     Err(_) => vec![],
                 },
@@ -1896,6 +1947,15 @@ where
                 ice_servers,
                 ice_transport_policy,
             } => {
+                // A muxed connection gathers host candidates only; relay-only would gather
+                // nothing at all, so refuse the switch instead of silently stranding the
+                // connection with no candidates.
+                if self.udp_mux.is_some() && ice_transport_policy == RTCIceTransportPolicy::Relay {
+                    error!(
+                        "cannot switch a muxed connection to relay-only ICE: a mux gathers host candidates only"
+                    );
+                    return true;
+                }
                 // Keep the active gathering/allocation intact. The new configuration
                 // takes effect when the next gathering phase starts.
                 self.pending_ice_configuration = Some((ice_servers, ice_transport_policy));
@@ -2388,11 +2448,28 @@ where
     }
 
     async fn handle_timeout(&mut self, now: Instant) -> Result<()> {
+        self.expire_mux_ufrags(now);
         self.stun_gatherer.handle_timeout(now)?;
         self.turn_relayer.handle_timeout(now)?;
         let mut core = self.inner.core.lock().await;
         core.handle_timeout(now)?;
         Ok(())
+    }
+
+    /// Drop ufrags whose restart grace period has ended, so the mux's ufrag table cannot grow
+    /// with every ICE restart. The active ufrag is never expired.
+    fn expire_mux_ufrags(&mut self, now: Instant) {
+        let Some(mux) = &self.udp_mux else { return };
+        while self
+            .mux_ufrag_expiry
+            .front()
+            .is_some_and(|(t, _)| *t <= now)
+        {
+            let (_, ufrag) = self.mux_ufrag_expiry.pop_front().unwrap();
+            if self.mux_active_ufrag.as_deref() != Some(ufrag.as_str()) {
+                mux.remove_ufrag(&ufrag);
+            }
+        }
     }
 }
 
@@ -2403,10 +2480,8 @@ impl<A> Drop for PeerConnectionDriver<A> {
         // ufrag to a conn nobody reads from. The `mux_conn` guard matters for a driver whose
         // build *failed before registering* (e.g. a duplicate ufrag): without it, its drop
         // would evict the live connection that owns the registration.
-        if let Some((mux, ufrag)) = &self.udp_mux
-            && self.mux_conn.is_some()
-        {
-            mux.remove_conn(ufrag);
+        if let (Some(mux), Some((handle, _))) = (&self.udp_mux, &self.mux_conn) {
+            mux.remove_conn(*handle);
         }
     }
 }

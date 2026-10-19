@@ -367,12 +367,13 @@ fn test_udp_mux_pinned_credentials_are_unique_and_freed_on_close() {
     .unwrap();
 }
 
-/// An ICE restart on a muxed connection keeps the mux registration: credentials are pinned,
-/// so the ufrag — the mux's routing key — does not change, and the advertised candidates stay
-/// on the shared port across the restart. The muxed side also opts into the restart rebind,
-/// which for a muxed connection re-attaches to the existing registration instead of rebinding.
+/// An ICE restart on a muxed connection keeps the shared port but rotates the ufrag: the
+/// muxed side re-registers under the freshly rotated credentials (the old ufrag stays routable
+/// for a grace period), and the advertised candidates stay on the shared port across the
+/// restart. The muxed side also opts into the restart rebind, which re-attaches to the
+/// existing mux registration instead of rebinding the shared socket.
 #[test]
-fn test_udp_mux_ice_restart_keeps_port_and_ufrag() {
+fn test_udp_mux_ice_restart_rotates_ufrag_and_keeps_port() {
     block_on(async {
         env_logger::builder()
             .filter_level(log::LevelFilter::Info)
@@ -471,9 +472,9 @@ fn test_udp_mux_ice_restart_keeps_port_and_ufrag() {
             .find(|line| line.starts_with("a=ice-ufrag:"))
             .map(str::to_owned)
             .expect("restart offer carries an ice-ufrag");
-        assert_eq!(
+        assert_ne!(
             ufrag_before, ufrag_after,
-            "a muxed connection pins its ufrag — it is the mux's routing key"
+            "an ICE restart rotates the ufrag — the mux re-registers under the new one"
         );
         assert!(
             restart_offer
