@@ -1198,4 +1198,81 @@ mod tests {
             .unwrap();
         });
     }
+
+    /// An Allocate nobody answers has an end: seven requests on a lengthening RTO and then
+    /// the transaction is over. The relayer has to recognise that end as its own, and it
+    /// did not. It matches everything about an allocation against the id
+    /// `Client::allocate()` handed it — the *authenticated* retry's, because that is the
+    /// request that would carry the allocation — while a transaction that ran out was
+    /// reported under the id it was stored with, the anonymous request's. So the arm below
+    /// `tid == managed_client.allocate_tid` never ran, `gather_finished` stayed false, and
+    /// with one server and a relay-only peer `TurnGatheringComplete` was never emitted at
+    /// all: not late, never, and no gathering deadline outlasts that.
+    ///
+    /// Fixed in rtc-turn, which reports an exhausted Allocate under the id the caller holds
+    /// ([webrtc-rs/rtc#281]). This is the statement of what that buys here. The clock is
+    /// walked by hand rather than waited out, so the schedule's 7.8s costs the suite
+    /// nothing; `tests/turn_udp_silent_server.rs` is the same thing through a real socket.
+    ///
+    /// [webrtc-rs/rtc#281]: https://github.com/webrtc-rs/rtc/pull/281
+    #[test]
+    fn a_silent_udp_server_ends_its_part_in_gathering() {
+        futures::executor::block_on(async {
+            let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+            let turn_server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3478);
+            let mut relayer = RTCTurnRelayer::new(
+                vec![local_addr],
+                vec![RTCIceServer {
+                    urls: vec![format!("turn:{}?transport=udp", turn_server_addr)],
+                    username: "user".to_owned(),
+                    credential: "pass".to_owned(),
+                }],
+                RTCIceTransportPolicy::Relay,
+                None,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+            );
+
+            relayer.gather().await.expect("TURN gather should start");
+            relayer
+                .poll_write()
+                .expect("an Allocate for this server to ignore");
+
+            // Walk the client's own retransmit schedule to its end, dropping what it puts on
+            // the wire the way a server that is not listening does.
+            let mut deadline = relayer.poll_timeout().expect("a retransmit to wait for");
+            let first_deadline = deadline;
+            let mut completed_at = None;
+            for _ in 0..16 {
+                relayer.handle_timeout(deadline).expect("handle_timeout");
+                while relayer.poll_write().is_some() {}
+                while let Some(event) = relayer.poll_event() {
+                    if matches!(event, RTCTurnRelayEventOut::TurnGatheringComplete) {
+                        completed_at = Some(deadline);
+                    }
+                }
+                if completed_at.is_some() {
+                    break;
+                }
+                match relayer.poll_timeout() {
+                    Some(next) => deadline = next,
+                    None => break,
+                }
+            }
+
+            let completed_at = completed_at.expect(
+                "an Allocate that has run out of attempts ends this server's part in gathering",
+            );
+            let took = completed_at.duration_since(first_deadline);
+            assert!(
+                took < Duration::from_secs(10),
+                "the unreliable schedule ends at 7.8s, and this waited {took:?}"
+            );
+            assert_eq!(relayer.state(), RTCIceGatheringState::Complete);
+            assert!(
+                relayer.poll_event().is_none(),
+                "there is nothing to offer from a server that said nothing"
+            );
+        });
+    }
 }
