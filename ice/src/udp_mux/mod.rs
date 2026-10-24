@@ -36,6 +36,8 @@ fn normalize_socket_addr(target: &SocketAddr, socket_addr: &SocketAddr) -> Socke
     }
 }
 
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait UDPMux {
     /// Close the muxing.

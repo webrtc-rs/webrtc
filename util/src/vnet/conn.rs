@@ -17,6 +17,8 @@ use crate::vnet::chunk::{Chunk, ChunkUdp};
 const MAX_READ_QUEUE_SIZE: usize = 1024;
 
 /// vNet implements this
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub(crate) trait ConnObserver {
     async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<()>;

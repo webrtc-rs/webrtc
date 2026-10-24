@@ -13,6 +13,15 @@ use crate::url::*;
 /// The interval at which the agent performs candidate checks in the connecting phase.
 pub(crate) const DEFAULT_CHECK_INTERVAL: Duration = Duration::from_millis(200);
 
+/// Upper bound for writing one STUN message (check, nomination, response, keepalive).
+/// A UDP socket that stops reporting writable (seen on macOS for IPv6 host candidates whose
+/// datagrams never drain) would otherwise park the caller forever. The caller is the agent's
+/// single connectivity-check loop or a candidate's receive loop, so one bad local socket
+/// stopped every check and nomination of the agent and left the peer in `checking` (or its
+/// remote in "connected, DTLS never starts") for good. STUN is retransmitted, so a write that
+/// cannot go out promptly is treated as a lost datagram.
+pub(crate) const STUN_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+
 /// The interval used to keep candidates alive.
 pub(crate) const DEFAULT_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(2);
 

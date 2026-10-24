@@ -13,6 +13,8 @@ use super::socket_addr_ext::{SocketAddrExt, MAX_ADDR_SIZE};
 use super::{normalize_socket_addr, RECEIVE_MTU};
 
 /// A trait for a [`UDPMuxConn`] to communicate with an UDP mux.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait UDPMuxWriter {
     /// Registers an address for the given connection.
