@@ -300,8 +300,6 @@ impl Request {
             dst_addr: self.conn.local_addr()?,
             protocol: PROTO_UDP,
         };
-        let mut requested_port = 0;
-        let mut reservation_token = "".to_owned();
         let mut use_ipv4 = true;
 
         // RFC 8656 section 7.2: replay a successful Allocate transaction on
@@ -406,6 +404,12 @@ impl Request {
         //     request with a 508 (Insufficient Capacity) error.
         let mut reservation_token_attr = ReservationToken::default();
         let reservation_token_attr_result = reservation_token_attr.get_from(m);
+        if m.contains(ATTR_RESERVATION_TOKEN) && reservation_token_attr_result.is_err() {
+            return self
+                .respond_allocate_error(m, CODE_BAD_REQUEST, message_integrity)
+                .await;
+        }
+
         if reservation_token_attr_result.is_ok() {
             let mut even_port = EvenPort::default();
             if even_port.get_from(m).is_ok() {
@@ -493,35 +497,36 @@ impl Request {
         //    server rejects the request with a 508 (Insufficient Capacity)
         //    error.
         let mut even_port = EvenPort::default();
-        if even_port.get_from(m).is_ok() {
-            let mut random_port = 1;
-
-            while random_port % 2 != 0 {
-                random_port = match self.allocation_manager.get_random_even_port().await {
-                    Ok(port) => port,
-                    Err(err) => {
-                        let insufficient_capacity_msg = build_msg(
-                            m.transaction_id,
-                            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
-                            vec![Box::new(ErrorCodeAttribute {
-                                code: CODE_INSUFFICIENT_CAPACITY,
-                                reason: vec![],
-                            })],
-                        )?;
-                        return build_and_send_err(
-                            &self.conn,
-                            self.src_addr,
-                            insufficient_capacity_msg,
-                            err,
-                        )
-                        .await;
-                    }
-                };
-            }
-
-            requested_port = random_port;
-            reservation_token = rand_seq(8);
+        let has_even = m.contains(ATTR_EVEN_PORT);
+        if has_even && even_port.get_from(m).is_err() {
+            return self
+                .respond_allocate_error(m, CODE_BAD_REQUEST, message_integrity)
+                .await;
         }
+        let relay_result = if reservation_token_attr_result.is_ok() {
+            self.allocation_manager
+                .take_reserved_relay(&reservation_token_attr.0)
+                .await
+                .map(|relay| (relay, None))
+                .ok_or(Error::ErrNoAllocationFound)
+        } else if has_even {
+            self.allocation_manager
+                .allocate_even_relay(use_ipv4, even_port.reserve_port)
+                .await
+        } else {
+            self.allocation_manager
+                .allocate_relay(use_ipv4)
+                .await
+                .map(|relay| (relay, None))
+        };
+        let (relay, reservation_token) = match relay_result {
+            Ok(result) => result,
+            Err(_) => {
+                return self
+                    .respond_allocate_error(m, CODE_INSUFFICIENT_CAPACITY, message_integrity)
+                    .await
+            }
+        };
 
         // 7. At any point, the server MAY choose to reject the request with a
         //    486 (Allocation Quota Reached) error if it feels the client is
@@ -537,13 +542,12 @@ impl Request {
         let lifetime_duration = allocation_lifetime(m);
         let a = match self
             .allocation_manager
-            .create_allocation(
+            .create_allocation_with_relay(
                 five_tuple,
                 Arc::clone(&self.conn),
-                requested_port,
                 lifetime_duration,
                 username,
-                use_ipv4,
+                relay,
             )
             .await
         {
@@ -583,12 +587,6 @@ impl Request {
         let relay_port = a.relay_addr.port();
 
         let msg = {
-            if !reservation_token.is_empty() {
-                self.allocation_manager
-                    .create_reservation(reservation_token.clone(), relay_port)
-                    .await;
-            }
-
             let mut response_attrs: Vec<Box<dyn Setter>> = vec![
                 Box::new(RelayedAddress {
                     ip: relay_ip,
@@ -601,10 +599,8 @@ impl Request {
                 }),
             ];
 
-            if !reservation_token.is_empty() {
-                response_attrs.push(Box::new(ReservationToken(
-                    reservation_token.as_bytes().to_vec(),
-                )));
+            if let Some(token) = reservation_token {
+                response_attrs.push(Box::new(ReservationToken(token)));
             }
 
             response_attrs.push(Box::new(message_integrity));
@@ -618,6 +614,26 @@ impl Request {
         // Cache before sending: a failed/lost send must still be replayable.
         *a.allocate_response.lock().await = Some(msg.clone());
         build_and_send(&self.conn, self.src_addr, msg).await
+    }
+
+    async fn respond_allocate_error(
+        &self,
+        m: &Message,
+        code: ErrorCode,
+        integrity: MessageIntegrity,
+    ) -> Result<()> {
+        let response = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+            vec![
+                Box::new(ErrorCodeAttribute {
+                    code,
+                    reason: vec![],
+                }),
+                Box::new(integrity),
+            ],
+        )?;
+        build_and_send(&self.conn, self.src_addr, response).await
     }
 
     pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<()> {

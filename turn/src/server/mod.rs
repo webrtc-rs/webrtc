@@ -17,6 +17,7 @@ use util::Conn;
 
 use crate::allocation::allocation_manager::*;
 use crate::allocation::five_tuple::FiveTuple;
+use crate::allocation::reservation::Reservations;
 use crate::allocation::AllocationInfo;
 use crate::auth::AuthHandler;
 use crate::error::*;
@@ -31,6 +32,7 @@ pub struct Server {
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
     command_tx: Mutex<Option<broadcast::Sender<Command>>>,
+    reservations: Arc<Reservations>,
 }
 
 impl Server {
@@ -45,6 +47,7 @@ impl Server {
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
             command_tx: Mutex::new(Some(command_tx.clone())),
+            reservations: Arc::new(Reservations::default()),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -58,10 +61,13 @@ impl Server {
             let channel_bind_timeout = s.channel_bind_timeout;
             let handle_rx = command_tx.subscribe();
             let conn = p.conn;
-            let allocation_manager = Arc::new(Manager::new(ManagerConfig {
-                relay_addr_generator: p.relay_addr_generator,
-                alloc_close_notify: config.alloc_close_notify.clone(),
-            }));
+            let allocation_manager = Arc::new(Manager::with_reservations(
+                ManagerConfig {
+                    relay_addr_generator: p.relay_addr_generator,
+                    alloc_close_notify: config.alloc_close_notify.clone(),
+                },
+                Arc::clone(&s.reservations),
+            ));
 
             tokio::spawn(Server::read_loop(
                 conn,
@@ -147,7 +153,7 @@ impl Server {
 
         let (mut close_tx, mut close_rx) = oneshot::channel::<()>();
 
-        tokio::spawn({
+        let command_task = tokio::spawn({
             let allocation_manager = Arc::clone(&allocation_manager);
 
             async move {
@@ -165,9 +171,15 @@ impl Server {
 
                             continue;
                         }
-                        Err(RecvError::Closed) | Ok(Command::Close(_)) => {
+                        Ok(Command::Close(completion)) => {
                             close_rx.close();
-                            break;
+                            // Keep the close acknowledgement in the JoinHandle
+                            // until the read loop has released its sockets.
+                            break Some(completion);
+                        }
+                        Err(RecvError::Closed) => {
+                            close_rx.close();
+                            break None;
                         }
                         Err(RecvError::Lagged(n)) => {
                             log::warn!("Turn server has lagged by {n} messages");
@@ -210,6 +222,8 @@ impl Server {
 
         let _ = allocation_manager.close().await;
         let _ = conn.close().await;
+        command_task.abort();
+        let _ = command_task.await;
     }
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing.
@@ -221,6 +235,7 @@ impl Server {
 
         if let Some(tx) = tx {
             if tx.receiver_count() == 0 {
+                self.reservations.clear().await;
                 return Ok(());
             }
 
@@ -229,6 +244,7 @@ impl Server {
             closed_tx.closed().await
         }
 
+        self.reservations.clear().await;
         Ok(())
     }
 }
