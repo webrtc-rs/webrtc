@@ -57,6 +57,11 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         };
 
         if requested_port != 0 {
+            if !(self.min_port..=self.max_port).contains(&requested_port) {
+                return Err(Error::Other(
+                    "requested relay port is outside the configured range".into(),
+                ));
+            }
             let addr = self
                 .net
                 .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
@@ -86,3 +91,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         Err(Error::ErrMaxRetriesExceeded)
     }
 }
+
+#[cfg(test)]
+mod relay_range_test;
