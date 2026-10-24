@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use log::*;
+use tokio::time::Instant;
 
 use crate::cipher_suite::*;
 use crate::config::*;
@@ -315,6 +316,14 @@ impl DTLSConn {
     async fn send(&mut self) -> Result<HandshakeState> {
         // Send flights
         if let Some(pkts) = self.flights.clone() {
+            if self.current_flight.is_last_send_flight() {
+                // Keep the final flight: the peer may not receive it and then
+                // retransmits its previous flight (RFC 6347 section 4.2.4).
+                *self.last_flight.lock().await = Some(LastFlight {
+                    packets: pkts.clone(),
+                    sent_at: Instant::now(),
+                });
+            }
             self.write_packets(pkts).await?;
         }
 

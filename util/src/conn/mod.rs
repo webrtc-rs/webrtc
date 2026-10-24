@@ -24,6 +24,8 @@ use tokio::net::ToSocketAddrs;
 
 use crate::error::Result;
 
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Conn {
     async fn connect(&self, addr: SocketAddr) -> Result<()>;
@@ -39,6 +41,8 @@ pub trait Conn {
 
 /// A Listener is a generic network listener for connection-oriented protocols.
 /// Multiple connections may invoke methods on a Listener simultaneously.
+// async_trait expands to a #[must_use] fn returning a #[must_use] future (rustc 1.99 clippy)
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Listener {
     /// accept waits for and returns the next connection to the listener.
