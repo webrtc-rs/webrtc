@@ -1,10 +1,12 @@
 use std::net::Ipv4Addr;
 use std::ops::Sub;
 use std::str::FromStr;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use stun::message::*;
 use stun::textattrs::Username;
+use tokio::net::UdpSocket;
 use util::vnet::*;
 use util::Conn;
 use waitgroup::{WaitGroup, Worker};
@@ -2198,6 +2200,57 @@ async fn test_lite_lifecycle() -> Result<()> {
     let _ = b_failed_rx.recv().await;
 
     b_agent.close().await?;
+
+    Ok(())
+}
+
+/// Gathering tasks can outlive `Agent::close()`. A candidate they add afterwards used to be
+/// stored and started but never closed, so its UDP socket leaked for the life of the process.
+#[tokio::test]
+async fn test_add_candidate_after_close_is_rejected() -> Result<()> {
+    let a = Agent::new(AgentConfig::default()).await?;
+    let ai = Arc::clone(&a.internal);
+    a.close().await?;
+
+    let conn = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let port = conn.local_addr()?.port();
+    let host_config = CandidateHostConfig {
+        base_config: CandidateBaseConfig {
+            network: "udp".to_owned(),
+            address: "127.0.0.1".to_owned(),
+            port,
+            component: 1,
+            conn: Some(Arc::clone(&conn) as Arc<dyn Conn + Send + Sync>),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let candidate: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
+
+    let result = ai.add_candidate(&candidate).await;
+    assert!(
+        matches!(result, Err(Error::ErrClosed)),
+        "candidate added after close must be rejected, got {result:?}"
+    );
+    assert!(
+        ai.local_candidates.lock().await.is_empty(),
+        "candidate added after close must not be stored"
+    );
+
+    // The gatherer closes a rejected candidate; that must release the socket.
+    candidate.close().await?;
+    drop(candidate);
+    for _ in 0..100 {
+        if Arc::strong_count(&conn) == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        Arc::strong_count(&conn),
+        1,
+        "socket still referenced after the rejected candidate was closed"
+    );
 
     Ok(())
 }
