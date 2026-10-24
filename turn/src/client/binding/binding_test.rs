@@ -12,10 +12,10 @@ fn test_binding_manager_number_assignment() -> Result<()> {
         assert_eq!(MIN_CHANNEL_NUMBER + i, n, "should match");
     }
 
-    m.next = 0x7ff0;
+    m.next = 0x4ff0;
     for i in 0..16 {
         n = m.assign_channel_number();
-        assert_eq!(0x7ff0 + i, n, "should match");
+        assert_eq!(0x4ff0 + i, n, "should match");
     }
     // back to min
     n = m.assign_channel_number();
@@ -80,4 +80,39 @@ fn test_binding_manager_failure() -> Result<()> {
     assert!(!ok, "should fail");
 
     Ok(())
+}
+
+#[test]
+fn channel_range_exhaustion_preserves_live_bindings_and_reuses_a_free_number() {
+    let mut manager = BindingManager::new();
+    for port in 0..4096 {
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port));
+        let binding = manager.create(addr).expect("available channel number");
+        assert!((0x4000..=0x4fff).contains(&binding.number));
+    }
+    let extra = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5000));
+    assert!(manager.create(extra).is_none());
+    assert_eq!(manager.size(), 4096);
+    for port in 0..4096 {
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port));
+        assert_eq!(manager.find_by_number(0x4000 + port).unwrap().addr, addr);
+    }
+    let freed = 0x4567;
+    assert!(manager.delete_by_number(freed));
+    assert_eq!(manager.create(extra).unwrap().number, freed);
+    assert_eq!(manager.find_by_number(freed).unwrap().addr, extra);
+    assert_eq!(manager.size(), 4096);
+}
+
+#[test]
+fn channel_number_wrap_skips_live_bindings() {
+    let mut manager = BindingManager::new();
+    let first = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1000));
+    assert_eq!(manager.create(first).unwrap().number, 0x4000);
+    manager.next = 0x4fff;
+    let last = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1001));
+    assert_eq!(manager.create(last).unwrap().number, 0x4fff);
+    let wrapped = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1002));
+    assert_eq!(manager.create(wrapped).unwrap().number, 0x4001);
+    assert_eq!(manager.find_by_number(0x4000).unwrap().addr, first);
 }
