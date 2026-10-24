@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>UDP Mux DataChannel Test</title>
+</head>
+<body>
+  <h2>WebRTC DataChannel Test</h2>
+  <input id="msg" placeholder="Message">
+  <button id="sendBtn" disabled onclick="sendMsg()">Send</button>
+  <pre id="log"></pre>
+  <script>
+    const sessionId = crypto.randomUUID();
+    const pc = new RTCPeerConnection({iceServers: []});
+    const channel = pc.createDataChannel("chat");
+    const log = msg => document.getElementById("log").textContent += msg + "\n";
+    pc.onconnectionstatechange = () => log(`Connection state: ${pc.connectionState}`);
+    channel.onopen = () => {
+      log("DataChannel opened");
+      document.getElementById("sendBtn").disabled = false;
+    };
+    channel.onmessage = event => log(`Server: ${event.data}`);
+    pc.onicecandidate = event => {
+      if (event.candidate) fetch("/candidate", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({session_id: sessionId, candidate: event.candidate})
+      });
+    };
+    async function start() {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const response = await fetch("/offer", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({session_id: sessionId, offer})
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await pc.setRemoteDescription(await response.json());
+    }
+    function sendMsg() {
+      const input = document.getElementById("msg");
+      if (input.value.trim() && channel.readyState === "open") {
+        channel.send(input.value);
+        log(`You: ${input.value}`);
+        input.value = "";
+      }
+    }
+    start().catch(error => log(`Connection failed: ${error.message}`));
+  </script>
+</body>
+</html>

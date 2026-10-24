@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **UDP multiplexing: many peer connections over one shared UDP socket** — new
+  `webrtc::peer_connection::transport::udp_mux` module with a `UDPMux` trait and the built-in
+  `UDPMuxDefault`. Handing one mux to every `PeerConnectionBuilder::with_udp_mux` serves any
+  number of connections from a single fixed UDP port (the SRS/mediamtx deployment shape),
+  where a pinned `with_udp_addrs` port fails the second connection's bind with `EADDRINUSE`.
+  The mux's reader demultiplexes inbound datagrams by the local ICE ufrag in each STUN check
+  and by learnt peer address for ufrag-less traffic (DTLS/SRTP/SRTCP); candidates are
+  advertised per interface on the mux's port, with inbound packets attributed to an interface
+  via `RecvMeta::dst_ip` (packet info) and outbound ones pinned with `Transmit::src_ip` on a
+  wildcard listen. Muxed connections gather host candidates only (the restriction Pion's
+  `ICEUDPMux` documents), and their ICE credentials are pinned at build time so the route
+  survives ICE restarts. `tests/udp_mux.rs` runs two connections on one fixed port end to end.
+  Requires `rtc` ≥ the commit that adds `SettingEngine::set_ice_credentials`/
+  `ice_credentials`.
 - **Crypto provider selection** ([webrtc#839](https://github.com/webrtc-rs/webrtc/issues/839),
   [rtc#128](https://github.com/webrtc-rs/rtc/issues/128)). New `crypto-ring` (default) and `crypto-aws-lc-rs`
   Cargo features forward to `rtc`. They are additive: enabling both compiles both providers and
