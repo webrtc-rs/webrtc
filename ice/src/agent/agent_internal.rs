@@ -1023,12 +1023,31 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if let Err(err) = local.write_to(&msg.raw, &**remote).await {
-            log::trace!(
-                "[{}]: failed to send STUN message: {}",
-                self.get_name(),
-                err
-            );
+        let write = local.write_to(&msg.raw, &**remote);
+        // A framed TCP write cannot be cancelled halfway, so only UDP writes are bounded.
+        let result = if local.network_type().is_tcp() {
+            Ok(write.await)
+        } else {
+            tokio::time::timeout(STUN_SEND_TIMEOUT, write).await
+        };
+        match result {
+            Ok(Ok(_)) => {}
+            Ok(Err(err)) => {
+                log::trace!(
+                    "[{}]: failed to send STUN message: {}",
+                    self.get_name(),
+                    err
+                );
+            }
+            Err(_) => {
+                log::debug!(
+                    "[{}]: STUN send from {} to {} not done within {:?}, dropped",
+                    self.get_name(),
+                    local,
+                    remote,
+                    STUN_SEND_TIMEOUT
+                );
+            }
         }
     }
 
