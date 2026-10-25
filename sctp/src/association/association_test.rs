@@ -2603,3 +2603,98 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
 
     Ok(())
 }
+
+/// A connection that records every packet it sends, in send order.
+struct RecordingConn {
+    inner: Arc<dyn Conn + Send + Sync>,
+    sent: std::sync::Mutex<Vec<Bytes>>,
+}
+
+#[async_trait]
+impl Conn for RecordingConn {
+    async fn connect(&self, addr: SocketAddr) -> util::Result<()> {
+        self.inner.connect(addr).await
+    }
+    async fn recv(&self, buf: &mut [u8]) -> util::Result<usize> {
+        self.inner.recv(buf).await
+    }
+    async fn recv_from(&self, buf: &mut [u8]) -> util::Result<(usize, SocketAddr)> {
+        self.inner.recv_from(buf).await
+    }
+    async fn send(&self, buf: &[u8]) -> util::Result<usize> {
+        self.sent.lock().unwrap().push(Bytes::copy_from_slice(buf));
+        self.inner.send(buf).await
+    }
+    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> util::Result<usize> {
+        self.inner.send_to(buf, target).await
+    }
+    fn local_addr(&self) -> util::Result<SocketAddr> {
+        self.inner.local_addr()
+    }
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.inner.remote_addr()
+    }
+    async fn close(&self) -> util::Result<()> {
+        self.inner.close().await
+    }
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
+}
+
+/// The write loop marshals each gathered batch of packets in one blocking task and sends them
+/// in the order they were gathered: over a lossless bridge, every DATA chunk leaves in TSN
+/// order, within a batch (a message fragments into several packets) and across batches
+/// (successive gathers, bounded by the congestion window).
+#[tokio::test]
+async fn test_assoc_write_loop_sends_data_chunks_in_tsn_order() -> Result<()> {
+    const SI: u16 = 1;
+    const MESSAGES: usize = 16;
+    let mut sbuf = vec![0u8; 4000];
+    fill(&mut sbuf);
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+    let recorder = Arc::new(RecordingConn {
+        inner: Arc::new(ca),
+        sent: std::sync::Mutex::new(vec![]),
+    });
+    let (a0, mut a1) =
+        create_new_association_pair(&br, recorder.clone(), Arc::new(cb), AckMode::NoDelay, 0)
+            .await?;
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+    recorder.sent.lock().unwrap().clear();
+
+    for _ in 0..MESSAGES {
+        s0.write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
+    }
+    flush_buffers(&br, &a0, &a1).await;
+
+    let mut rbuf = vec![0u8; sbuf.len()];
+    for _ in 0..MESSAGES {
+        let (n, _) = s1.read_sctp(&mut rbuf).await?;
+        assert_eq!(&rbuf[..n], &sbuf[..], "unexpected received data");
+    }
+
+    let sent = recorder.sent.lock().unwrap().clone();
+    let tsns: Vec<u32> = sent
+        .iter()
+        .flat_map(|raw| Packet::unmarshal(raw).expect("a sent packet").chunks)
+        .filter_map(|c| c.as_any().downcast_ref::<ChunkPayloadData>().map(|d| d.tsn))
+        .collect();
+    assert!(
+        tsns.len() >= MESSAGES * 4,
+        "every message fragments into several DATA chunks: {}",
+        tsns.len()
+    );
+    assert!(
+        tsns.windows(2).all(|w| w[1] == w[0].wrapping_add(1)),
+        "DATA chunks left out of TSN order: {tsns:?}"
+    );
+
+    close_association_pair(&br, a0, a1).await;
+    Ok(())
+}
