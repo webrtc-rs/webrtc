@@ -28,11 +28,18 @@ impl RelayAddressGenerator for RelayAddressGeneratorStatic {
         }
     }
 
+    fn supports_family(&self, use_ipv4: bool) -> bool {
+        self.relay_address.is_ipv4() == use_ipv4
+    }
+
     async fn allocate_conn(
         &self,
         use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
+        if !self.supports_family(use_ipv4) {
+            return Err(Error::ErrInvalidRequestedFamilyValue);
+        }
         let addr = self
             .net
             .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))

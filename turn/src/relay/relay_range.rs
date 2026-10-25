@@ -45,11 +45,18 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         }
     }
 
+    fn supports_family(&self, use_ipv4: bool) -> bool {
+        self.relay_address.is_ipv4() == use_ipv4
+    }
+
     async fn allocate_conn(
         &self,
         use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
+        if !self.supports_family(use_ipv4) {
+            return Err(Error::ErrInvalidRequestedFamilyValue);
+        }
         let max_retries = if self.max_retries == 0 {
             DEFAULT_MAX_RETRIES
         } else {
