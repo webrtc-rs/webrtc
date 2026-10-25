@@ -142,6 +142,22 @@ impl VirtualClock {
         self.state.lock().expect("clock poisoned").timers.len()
     }
 
+    /// Spawn a thread that advances this clock in small steps until `stop` is
+    /// set, for tests whose body blocks on a future gated by virtual timers
+    /// (e.g. a DNS resolution bounded by a runtime timeout). The thread paces
+    /// itself with a short real sleep per step so woken tasks can re-poll and
+    /// register their next timer between advances.
+    pub fn drive(self: &Arc<Self>, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<()> {
+        let clock = Arc::clone(self);
+        std::thread::spawn(move || {
+            let step = Duration::from_millis(50);
+            while !stop.load(Ordering::Relaxed) {
+                clock.advance(step);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        })
+    }
+
     /// Register a timer `delay` from the current time, returning its id. A `delay` of zero
     /// is already due and yields `None`.
     fn register(&self, delay: Duration) -> Option<u64> {
@@ -411,6 +427,18 @@ impl AsyncUdpSocket for MockUdpSocket {
     }
 }
 
+/// What `resolve_host` should do for a registered hostname.
+#[derive(Debug, Clone)]
+enum MockDnsEntry {
+    /// Answer with these addresses after `delay` of virtual time — a slow resolver.
+    Answer {
+        delay: Duration,
+        addrs: Vec<SocketAddr>,
+    },
+    /// Never answer, for exercising the caller's resolution timeout.
+    Pending,
+}
+
 /// A deterministic [`Runtime`] backed by a [`VirtualClock`].
 ///
 /// See the [module docs](self) for usage and scope.
@@ -418,6 +446,7 @@ impl AsyncUdpSocket for MockUdpSocket {
 pub struct MockRuntime {
     clock: Arc<VirtualClock>,
     udp_network: Arc<MockUDPNetwork>,
+    dns: Arc<Mutex<HashMap<String, MockDnsEntry>>>,
 }
 
 impl MockRuntime {
@@ -436,6 +465,7 @@ impl MockRuntime {
         Self {
             clock: Arc::new(VirtualClock::new()),
             udp_network: network,
+            dns: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -447,6 +477,43 @@ impl MockRuntime {
     /// Handle to this runtime's network, for binding further sockets or sharing it.
     pub fn network(&self) -> Arc<MockUDPNetwork> {
         Arc::clone(&self.udp_network)
+    }
+
+    /// Make `resolve_host(host)` answer with `addrs` after `delay` of virtual
+    /// time. The delay is clock-driven, so it elapses only when the clock is
+    /// advanced — a test blocks on the resolution while another thread (or the
+    /// test body, between polls) advances time.
+    pub fn register_dns_answer(&self, host: &str, delay: Duration, addrs: Vec<SocketAddr>) {
+        self.dns
+            .lock()
+            .expect("dns poisoned")
+            .insert(host.to_owned(), MockDnsEntry::Answer { delay, addrs });
+    }
+
+    /// Make `resolve_host(host)` never answer, for exercising the caller's
+    /// resolution timeout.
+    pub fn register_dns_pending(&self, host: &str) {
+        self.dns
+            .lock()
+            .expect("dns poisoned")
+            .insert(host.to_owned(), MockDnsEntry::Pending);
+    }
+
+    /// Block on `future` while a background thread advances the clock,
+    /// returning its output and the virtual time it took.
+    ///
+    /// For tests whose future waits on virtual timers — a bounded DNS
+    /// resolution, say — which would otherwise need every caller to wire the
+    /// clock-driving thread by hand.
+    pub fn block_on_driving_clock<T>(&self, future: impl Future<Output = T>) -> (T, Duration) {
+        let stop = Arc::new(AtomicBool::new(false));
+        let driver = self.clock().drive(stop.clone());
+        let start = self.clock.elapsed();
+        let value = futures::executor::block_on(future);
+        let elapsed = self.clock.elapsed() - start;
+        stop.store(true, Ordering::Relaxed);
+        driver.join().expect("clock driver thread");
+        (value, elapsed)
     }
 }
 
@@ -505,12 +572,22 @@ impl Runtime for MockRuntime {
         host: &'a str,
     ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>> {
         // Accept literal addresses so tests can exercise ICE paths without DNS.
-        Box::pin(async move {
-            match host.parse::<SocketAddr>() {
-                Ok(addr) => Ok(vec![addr]),
-                Err(_) => Err(unsupported("resolve_host (non-literal address)")),
+        if let Ok(addr) = host.parse::<SocketAddr>() {
+            return Box::pin(async move { Ok(vec![addr]) });
+        }
+
+        let entry = self.dns.lock().expect("dns poisoned").get(host).cloned();
+        match entry {
+            Some(MockDnsEntry::Answer { delay, addrs }) => {
+                let sleep = self.sleep(delay);
+                Box::pin(async move {
+                    sleep.await;
+                    Ok(addrs)
+                })
             }
-        })
+            Some(MockDnsEntry::Pending) => Box::pin(futures::future::pending()),
+            None => Box::pin(async move { Err(unsupported("resolve_host (non-literal address)")) }),
+        }
     }
 
     fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
