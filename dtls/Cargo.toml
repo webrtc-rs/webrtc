@@ -14,8 +14,8 @@ util = { workspace = true, default-features = false, features = ["conn"] }
 
 byteorder = "1"
 rand_core = "0.6"
-p256 = { version = "0.14", features = ["default", "ecdh", "ecdsa"] }
-p384 = "0.14"
+p256 = { version = "0.14", features = ["default", "ecdh", "ecdsa", "getrandom"] }
+p384 = { version = "0.14", features = ["ecdh", "getrandom"] }
 rand = "0.9"
 hmac = "0.12"
 sec1 = { version = "0.8", features = ["std"] }
