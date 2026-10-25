@@ -86,7 +86,6 @@ use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
-use crate::peer_connection::transport::udp_mux;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::Registry;
 
@@ -185,7 +184,6 @@ pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
     dedicated_reactor_pool_size: usize,
     data_channel_send_buffer_limit: usize,
     /// Held rather than forwarded immediately, so [`build`](Self::build) can resolve the crypto
@@ -201,7 +199,6 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A> {
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
-            udp_mux: None,
             dedicated_reactor_pool_size: 0,
             setting_engine: SettingEngine::default(),
             // `usize::MAX` = unbounded: no send back-pressure unless the application
@@ -288,23 +285,6 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         self
     }
 
-    /// Shares one UDP socket across connections instead of binding per connection.
-    ///
-    /// The mux owns the socket; this connection registers on it under its ICE ufrag and
-    /// receives the datagrams routed to that ufrag. This is the deployment shape of servers
-    /// like SRS or mediamtx: exactly one UDP port to open or forward, however many
-    /// connections the process serves. See [`udp_mux`] for how routing works and the
-    /// constraints (host candidates only; pinned ICE credentials).
-    ///
-    /// Mutually exclusive with [`with_udp_addrs`](Self::with_udp_addrs): the mux owns the
-    /// socket, so there is nothing left for a per-connection bind. ICE credentials are not
-    /// pinned by the mux — the driver registers whatever the agent holds at bind time and
-    /// re-registers under the rotated credentials on an ICE restart.
-    pub fn with_udp_mux(mut self, udp_mux: Arc<dyn udp_mux::UDPMux>) -> Self {
-        self.udp_mux = Some(udp_mux);
-        self
-    }
-
     /// Set the size of the dedicated reactor pool used. Defaults to `0`, means disabled.
     /// Values above `1024` are clamped down to it.
     ///
@@ -384,33 +364,6 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         };
         self.setting_engine
             .set_crypto_provider(crypto_provider.clone());
-
-        // A muxed connection registers under the ICE credentials the agent holds: the driver
-        // reads them at first bind and re-reads them after an ICE restart (which rotates
-        // them), so nothing is pinned here — the mux's routing key always tracks the agent's
-        // current ufrag.
-        let udp_mux = if let Some(mux) = self.udp_mux {
-            if !self.udp_addrs.is_empty() {
-                return Err(Error::Other(
-                    "`with_udp_addrs` and `with_udp_mux` are mutually exclusive: the mux owns \
-                     the socket, there is nothing left to bind"
-                        .to_owned(),
-                ));
-            }
-            Some(mux)
-        } else {
-            None
-        };
-
-        // Whether the application pinned ICE credentials on the setting engine. Pinned
-        // credentials survive into ICE restarts (rtc reuses them), which a muxed connection
-        // cannot tolerate — its routing ufrag must rotate — so the combination is refused at
-        // restart time (see `ensure_mux_credentials_can_restart`).
-        let pins_credentials = {
-            let (ufrag, pwd) = self.setting_engine.ice_credentials();
-            !ufrag.is_empty() || !pwd.is_empty()
-        };
-
         let mdns_mode = self.setting_engine.multicast_dns().mode;
         let turn_allocation_refresh_interval_cap =
             self.setting_engine.turn_allocation_refresh_interval_cap();
@@ -446,12 +399,10 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
             discard_local_candidates_during_ice_restart,
             self.udp_addrs,
             self.tcp_addrs,
-            udp_mux,
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
             turn_allocation_refresh_interval_cap,
             crypto_provider,
-            pins_credentials,
         )
         .await
     }
@@ -795,14 +746,6 @@ pub(crate) struct PeerConnectionImpl {
     /// left running on a pool thread if the connection is dropped without an explicit
     /// `close()`. (`close()` itself treats both runtimes alike.)
     dedicated_reactor: bool,
-    /// Whether this connection shares a UDP mux. A mux gathers host candidates only, so a
-    /// relay-only ICE policy is rejected at `set_configuration` instead of silently gathering
-    /// nothing.
-    is_muxed: bool,
-    /// Whether the application pinned ICE credentials on the setting engine. Pinned credentials
-    /// survive ICE restarts (rtc reuses them), which breaks the ufrag rotation a muxed
-    /// connection relies on — so an ICE restart is refused for that combination.
-    pins_credentials: bool,
 }
 
 pub(crate) struct PeerConnectionRef {
@@ -1036,22 +979,6 @@ impl PeerConnectionRef {
 }
 
 impl PeerConnectionImpl {
-    /// A muxed connection cannot rotate its routing ufrag when the application pinned ICE
-    /// credentials: rtc reuses the pinned pair across restarts, so the mux would keep routing
-    /// under a stale ufrag. Refuse an ICE restart for that combination instead of silently
-    /// breaking the mux's routing.
-    fn ensure_mux_credentials_can_restart(&self) -> Result<()> {
-        if self.is_muxed && self.pins_credentials {
-            return Err(Error::Other(
-                "a muxed connection with application-pinned ICE credentials cannot perform an \
-                 ICE restart: pinned credentials do not rotate, which would leave the mux's \
-                 routing ufrag stale"
-                    .to_owned(),
-            ));
-        }
-        Ok(())
-    }
-
     /// Create a new peer connection with a custom runtime
     #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
     async fn new<A: ToSocketAddrs + Send + 'static>(
@@ -1062,12 +989,10 @@ impl PeerConnectionImpl {
         discard_local_candidates_during_ice_restart: bool,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
-        udp_mux: Option<Arc<dyn udp_mux::UDPMux>>,
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
         turn_allocation_refresh_interval_cap: Option<Duration>,
         crypto_provider: Arc<dyn crypto::RTCCryptoProvider>,
-        pins_credentials: bool,
     ) -> Result<Self> {
         let configuration = core.get_configuration();
         let ice_servers = configuration.ice_servers().to_vec();
@@ -1098,8 +1023,6 @@ impl PeerConnectionImpl {
             driver_handle: Mutex::new(None),
             driver_stopped: Mutex::new(None),
             dedicated_reactor: dedicated_reactor_pool_size > 0,
-            is_muxed: udp_mux.is_some(),
-            pins_credentials,
         };
 
         // Init-result oneshot. `new()` awaits this so that socket wrapping and
@@ -1124,7 +1047,6 @@ impl PeerConnectionImpl {
                 inner,
                 udp_addrs,
                 tcp_addrs,
-                udp_mux,
                 mdns_mode,
                 ice_servers,
                 ice_gather_policy,
@@ -1272,7 +1194,6 @@ impl PeerConnection for PeerConnectionImpl {
         // An application can restart either way — `restart_ice()` or the offer option — and both
         // have to reach the socket rebind.
         if options.as_ref().is_some_and(|options| options.ice_restart) {
-            self.ensure_mux_credentials_can_restart()?;
             self.inner.mark_ice_restart_rebind_pending();
         }
         let mut core = self.inner.core.lock().await;
@@ -1391,7 +1312,6 @@ impl PeerConnection for PeerConnectionImpl {
     }
 
     async fn restart_ice(&self) -> Result<()> {
-        self.ensure_mux_credentials_can_restart()?;
         {
             let mut core = self.inner.core.lock().await;
             core.restart_ice();
@@ -1412,19 +1332,6 @@ impl PeerConnection for PeerConnectionImpl {
     }
 
     async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
-        // A mux gathers host candidates only and drops ICE servers, so relay-only would gather
-        // nothing. Fail at the API boundary rather than killing the driver after the call has
-        // already reported success.
-        if self.is_muxed
-            && configuration.ice_transport_policy()
-                == rtc::peer_connection::configuration::RTCIceTransportPolicy::Relay
-        {
-            return Err(Error::Other(
-                "a muxed connection gathers host candidates only and cannot use a relay-only \
-                 ICE transport policy"
-                    .to_owned(),
-            ));
-        }
         let (ice_servers, ice_transport_policy) = {
             let mut core = self.inner.core.lock().await;
             core.set_configuration(configuration)?;
@@ -1790,8 +1697,6 @@ mod tests {
                 driver_handle: Mutex::new(None),
                 driver_stopped: Mutex::new(None),
                 dedicated_reactor: false,
-                is_muxed: false,
-                pins_credentials: false,
             };
 
             let _dc = pc.create_data_channel("test", None).await.unwrap();
