@@ -370,10 +370,23 @@ fn test_udp_mux_pinned_credentials_are_unique_and_freed_on_close() {
 /// An ICE restart on a muxed connection keeps the shared port but rotates the ufrag: the
 /// muxed side re-registers under the freshly rotated credentials (the old ufrag stays routable
 /// for a grace period), and the advertised candidates stay on the shared port across the
-/// restart. The muxed side also opts into the restart rebind, which re-attaches to the
-/// existing mux registration instead of rebinding the shared socket.
+/// restart.
 #[test]
 fn test_udp_mux_ice_restart_rotates_ufrag_and_keeps_port() {
+    // With the rebind opted into, the restart re-attaches to the existing mux registration
+    // instead of rebinding the shared socket.
+    run_mux_ice_restart(true);
+}
+
+/// Same as above, but with the default setting: no rebind is armed for the restart, so the
+/// credential rotation reaches the mux through the credential sync that precedes the restarted
+/// gathering — no `bind_transports` run is involved.
+#[test]
+fn test_udp_mux_ice_restart_rotates_ufrag_without_rebind() {
+    run_mux_ice_restart(false);
+}
+
+fn run_mux_ice_restart(discard_local_candidates: bool) {
     block_on(async {
         env_logger::builder()
             .filter_level(log::LevelFilter::Info)
@@ -385,8 +398,8 @@ fn test_udp_mux_ice_restart_rotates_ufrag_and_keeps_port() {
         let mux = UDPMuxDefault::new(runtime(), socket)?;
         let mux_port = mux.local_addr()?.port();
 
-        // The muxed peer offers (full ICE — ICE Lite agents cannot initiate a restart) and
-        // opts into the restart rebind.
+        // The muxed peer offers (full ICE — ICE Lite agents cannot initiate a restart). The
+        // discard setting decides whether the restart also rebinds transports.
         let (gather_complete_tx, mut gather_rx) = channel::<()>(1);
         let (connected_tx, mut connected_rx) = channel::<()>(2);
         let (msg_tx, _msg_rx) = channel::<String>(8);
@@ -401,7 +414,7 @@ fn test_udp_mux_ice_restart_rotates_ufrag_and_keeps_port() {
             .with_runtime(runtime())
             .with_setting_engine(
                 SettingEngineBuilder::new()
-                    .with_discard_local_candidates_during_ice_restart(true)
+                    .with_discard_local_candidates_during_ice_restart(discard_local_candidates)
                     .build(),
             )
             .with_udp_mux(mux.clone())

@@ -41,10 +41,16 @@
 //!   `MESSAGE-INTEGRITY` that verifies against the connection's ICE password. Anything else
 //!   (forged checks, binding responses/indications, unauthenticated garbage) routes, if at
 //!   all, by peer address alone and never mutates the route table.
-//! * **Credentials rotate on restart.** The driver registers each connection's ufrag when it
-//!   learns it (from the agent, before signaling), and on an ICE restart re-registers under the
-//!   freshly rotated ufrag while the previous one is kept for a grace period. The peer observes
-//!   normal RFC 8445 ufrag/pwd rotation.
+//! * **Credentials rotate on restart.** The driver learns a connection's ICE credentials from
+//!   its *local description* at each gathering phase — the agent's generated pair is only
+//!   visible there after the first `set_local_description`, which is also the earliest moment
+//!   an inbound check can name the connection (the peer needs our SDP first). On an ICE
+//!   restart the freshly rotated ufrag is registered alongside the previous one, which is
+//!   kept for a grace period. The peer observes normal RFC 8445 ufrag/pwd rotation.
+//!   Application-pinned credentials
+//!   ([`SettingEngineBuilder::with_ice_credentials`](rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder::with_ice_credentials))
+//!   are registered eagerly at `build` instead — they are known before any SDP exists — so a
+//!   duplicate pinned ufrag fails `build` the way a failed bind does.
 //! * **Host candidates only.** Server-reflexive and relayed gathering send STUN/TURN traffic
 //!   to a small set of server addresses, and two connections behind one mux addressing the
 //!   same STUN server would collide in the address table. A muxed connection therefore
@@ -208,25 +214,27 @@ pub trait UDPMux: fmt::Debug + Send + Sync + 'static {
     /// The address the shared socket is bound to.
     fn local_addr(&self) -> io::Result<SocketAddr>;
 
-    /// Registers a **new** connection under `ufrag` and returns its identity and its view of
-    /// the shared socket.
+    /// Registers a **new** connection and returns its identity and its view of the shared
+    /// socket.
+    ///
+    /// The connection is created without a routing entry: the driver adds its ICE ufrag(s)
+    /// afterwards via [`add_ufrag`](UDPMux::add_ufrag), once the credentials are known — the
+    /// agent-generated pair is only visible in the local description after the first
+    /// `set_local_description`, while no inbound check can name the connection before the peer
+    /// has that SDP. Until a ufrag is added, only outbound sends and address-routed inbound
+    /// traffic work.
+    fn register_conn(&self) -> io::Result<(UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>)>;
+
+    /// Adds `ufrag` to a registered connection — its first routing entry, or a second one
+    /// alongside the previous during an ICE restart, so it routes checks under both ufrags.
     ///
     /// `pwd` is the connection's ICE password; the reader uses it to verify the
-    /// `MESSAGE-INTEGRITY` of STUN checks before trusting their ufrag. Fails with
-    /// [`io::ErrorKind::AlreadyExists`] when the ufrag is taken: two connections registered
-    /// under one ufrag would share one route, so the duplicate must be refused rather than
-    /// silently merged.
-    fn register_conn(
-        &self,
-        ufrag: &str,
-        pwd: &str,
-    ) -> io::Result<(UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>)>;
-
-    /// Adds `ufrag` to an already-registered connection, so it routes checks under both ufrags.
-    ///
-    /// This is how an ICE restart moves a connection to its freshly rotated credentials without
-    /// tearing down its socket view or queue. Fails with [`io::ErrorKind::AlreadyExists`] when
-    /// the ufrag is taken and with [`io::ErrorKind::InvalidInput`] for an unknown handle.
+    /// `MESSAGE-INTEGRITY` of STUN checks before trusting their ufrag. This is how an ICE
+    /// restart moves a connection to its freshly rotated credentials without tearing down its
+    /// socket view or queue. Fails with [`io::ErrorKind::AlreadyExists`] when the ufrag is
+    /// taken — two connections registered under one ufrag would share one route, so the
+    /// duplicate must be refused rather than silently merged — and with
+    /// [`io::ErrorKind::InvalidInput`] for an unknown handle or a malformed ufrag.
     fn add_ufrag(&self, handle: UDPMuxConnHandle, ufrag: &str, pwd: &str) -> io::Result<()>;
 
     /// Removes one ufrag from a connection (an ICE-restart grace period ending). The connection
@@ -293,7 +301,7 @@ impl Drop for UDPMuxDefault {
         // bound. The flag matters as much as the notification: a reader that has not created
         // its listener yet must still observe the shutdown.
         self.closed.store(true, Ordering::Release);
-        for (_, conn) in self.conns.get_mut().unwrap().drain() {
+        for (_, conn) in self.conns_by_handle.get_mut().unwrap().drain() {
             conn.close();
         }
         self.closed_notify.notify_waiters();
@@ -519,13 +527,7 @@ impl UDPMux for UDPMuxDefault {
         Ok(self.local_addr)
     }
 
-    fn register_conn(
-        &self,
-        ufrag: &str,
-        pwd: &str,
-    ) -> io::Result<(UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>)> {
-        validate_ufrag(ufrag)?;
-        let mut conns = self.conns.lock().unwrap();
+    fn register_conn(&self) -> io::Result<(UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>)> {
         // The closed check must hold the lock: close() sets the flag *before* draining the
         // table, so a registration that checked the flag unlocked could slip in behind the
         // drain and sit in a dead mux, never routed to and never hung up.
@@ -533,13 +535,6 @@ impl UDPMux for UDPMuxDefault {
             return Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "udp mux is closed",
-            ));
-        }
-
-        if conns.contains_key(ufrag) {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("ICE ufrag {ufrag:?} is already registered on the UDP mux"),
             ));
         }
 
@@ -553,14 +548,16 @@ impl UDPMux for UDPMuxDefault {
             pool: Arc::clone(&self.pool),
             rx: Mutex::new(Box::pin(rx)),
             tx,
-            credentials: Mutex::new(HashMap::from([(ufrag.to_owned(), pwd.to_owned())])),
+            // Empty: the driver adds the connection's ufrag(s) via `add_ufrag` once it knows
+            // the credentials (from the setting engine, or from the local SDP after the first
+            // `set_local_description`).
+            credentials: Mutex::new(HashMap::new()),
             learned: Mutex::new(LearnedAddrs::default()),
             dropped: AtomicU64::new(0),
             check_rate: Mutex::new(CheckRateLimiter::new()),
             me: OnceLock::new(),
         });
         let _ = conn.me.set(Arc::downgrade(&conn));
-        conns.insert(ufrag.to_owned(), conn.clone());
         self.conns_by_handle
             .lock()
             .unwrap()
@@ -648,9 +645,13 @@ impl UDPMux for UDPMuxDefault {
         if self.closed.swap(true, Ordering::AcqRel) {
             return;
         }
-        for (_, conn) in self.conns.lock().unwrap().drain() {
+        // Drain by handle, not by ufrag: a connection whose ufrag(s) were removed (or never
+        // added yet) exists only in the handle table, and the ufrag table may name one
+        // connection several times (ICE-restart grace).
+        for (_, conn) in self.conns_by_handle.lock().unwrap().drain() {
             conn.close();
         }
+        self.conns.lock().unwrap().clear();
         self.address_map.lock().unwrap().clear();
         // The reader parks in the socket's poll_recv; wake it so the task actually ends.
         self.closed_notify.notify_waiters();
@@ -1046,11 +1047,23 @@ mod tests {
         SocketAddr::from(([192, 0, 2, 1], 40000))
     }
 
+    /// Register a connection and add its first ufrag, the way the driver does once it knows
+    /// the connection's credentials.
+    fn register(
+        mux: &Arc<UDPMuxDefault>,
+        ufrag: &str,
+        pwd: &str,
+    ) -> (UDPMuxConnHandle, Arc<dyn AsyncUdpSocket>) {
+        let (handle, conn) = mux.register_conn().unwrap();
+        mux.add_ufrag(handle, ufrag, pwd).unwrap();
+        (handle, conn)
+    }
+
     #[test]
     fn routes_a_stun_check_to_the_conn_named_by_the_username() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         // USERNAME is "local-ufrag:remote-ufrag" from the sender's perspective: the first
         // half names the *receiving* connection.
@@ -1074,8 +1087,8 @@ mod tests {
     #[test]
     fn routes_by_the_address_learnt_on_send() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         // The connection's first outbound datagram claims the peer address; DTLS/SRTP from
         // that peer — never carrying a ufrag — routes back to it.
@@ -1090,7 +1103,7 @@ mod tests {
     #[test]
     fn drops_packets_from_unknown_peers() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         mux.route(b"\x80\x77dtls-not-stun", peer(), None, None);
         // A STUN check naming a ufrag nobody registered.
@@ -1114,7 +1127,7 @@ mod tests {
     #[test]
     fn a_stun_check_without_integrity_is_ignored() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         // A well-formed BINDING_REQUEST naming a real ufrag, but with no MESSAGE-INTEGRITY.
         let mut message = StunMessage::new();
@@ -1141,7 +1154,7 @@ mod tests {
     #[test]
     fn a_stun_check_with_wrong_integrity_is_ignored() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         // A valid BINDING_REQUEST, but signed with the wrong password.
         let packet = binding_request("aaaa:remote", "wrong-pwd");
@@ -1160,7 +1173,7 @@ mod tests {
     #[test]
     fn a_binding_response_does_not_learn_a_route() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         // A response (even one carrying a USERNAME) is not a check: it must not claim a route.
         let mut message = StunMessage::new();
@@ -1189,7 +1202,7 @@ mod tests {
     #[test]
     fn an_oversized_datagram_is_delivered_untruncated() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         let datagram = vec![0x5au8; POOL_BUF_LEN * 2];
         mux.route(
@@ -1217,7 +1230,7 @@ mod tests {
     #[test]
     fn dropping_the_mux_hangs_up_its_conns() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
         drop(mux);
 
         let mut buf = [0u8; 64];
@@ -1238,8 +1251,8 @@ mod tests {
         // A client that reconnects from the same address with fresh credentials must not be
         // stranded on its previous connection's route: the ufrag match re-points it.
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         send_to(&conn_a, b"outbound", peer());
         mux.route(
@@ -1265,8 +1278,8 @@ mod tests {
         // live connection owns (a peer could list another client's address and pull its
         // DTLS/SRTP). Only a STUN check naming our ufrag moves an owned route.
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         send_to(&conn_a, b"outbound", peer());
         send_to(&conn_b, b"outbound", peer()); // must NOT steal by sending
@@ -1291,17 +1304,18 @@ mod tests {
     }
 
     #[test]
-    fn register_conn_refuses_a_duplicate_ufrag() {
+    fn add_ufrag_refuses_a_duplicate_ufrag() {
         let mux = mux();
-        mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let dup = mux.register_conn("aaaa", "pwd-bbb");
+        register(&mux, "aaaa", "pwd-aaa");
+        let (handle_b, _) = mux.register_conn().unwrap();
+        let dup = mux.add_ufrag(handle_b, "aaaa", "pwd-bbb");
         assert_eq!(dup.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
     }
 
     #[test]
     fn add_ufrag_routes_under_both_ufrags_to_one_conn() {
         let mux = mux();
-        let (handle, conn) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (handle, conn) = register(&mux, "aaaa", "pwd-aaa");
 
         // An ICE restart rotates the credentials; the old ufrag stays until its grace ends.
         mux.add_ufrag(handle, "bbbb", "pwd-bbb").unwrap();
@@ -1340,11 +1354,11 @@ mod tests {
     #[test]
     fn remove_conn_by_handle_does_not_evict_a_reused_ufrag() {
         let mux = mux();
-        let (handle_a, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (handle_a, conn_a) = register(&mux, "aaaa", "pwd-aaa");
 
         // The old connection is deregistered (its driver's Drop) and its ufrag reused.
         mux.remove_conn(handle_a);
-        let (_, conn_b) = mux.register_conn("aaaa", "pwd-bbb").unwrap();
+        let (_, conn_b) = register(&mux, "aaaa", "pwd-bbb");
 
         // A belated removal of the *old* handle must not touch the new connection.
         mux.remove_conn(handle_a);
@@ -1365,12 +1379,13 @@ mod tests {
     #[test]
     fn remove_conn_frees_the_ufrag_and_its_routes() {
         let mux = mux();
-        let (handle, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (handle, conn_a) = register(&mux, "aaaa", "pwd-aaa");
         send_to(&conn_a, b"outbound", peer());
 
         mux.remove_conn(handle);
+        let (new_handle, _) = mux.register_conn().unwrap();
         assert!(
-            mux.register_conn("aaaa", "pwd-aaa").is_ok(),
+            mux.add_ufrag(new_handle, "aaaa", "pwd-aaa").is_ok(),
             "the ufrag is free again"
         );
 
@@ -1382,8 +1397,8 @@ mod tests {
     #[test]
     fn remove_conn_keeps_routes_a_new_conn_has_taken_over() {
         let mux = mux();
-        let (handle_a, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (handle_a, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         send_to(&conn_a, b"outbound", peer());
         // conn b takes the peer over with its STUN check, then conn a is removed:
@@ -1408,8 +1423,8 @@ mod tests {
         // from A's learned set too, or A's next send would skip re-registering a route that
         // no longer exists.
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (handle_b, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (handle_b, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         send_to(&conn_a, b"outbound", peer());
         mux.route(
@@ -1432,7 +1447,7 @@ mod tests {
     #[test]
     fn learned_addresses_are_bounded() {
         let mux = mux();
-        let (_, conn) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn) = register(&mux, "aaaa", "pwd-aaa");
 
         for i in 0..(MAX_LEARNED_ADDRS_PER_CONN + 16) {
             let addr = SocketAddr::from(([192, 0, 2, (i % 250) as u8], 40000 + i as u16));
@@ -1450,8 +1465,8 @@ mod tests {
     #[test]
     fn close_hangs_up_every_conn_and_rejects_registrations() {
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
-        let (_, conn_b) = mux.register_conn("bbbb", "pwd-bbb").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
+        let (_, conn_b) = register(&mux, "bbbb", "pwd-bbb");
 
         mux.close();
 
@@ -1468,13 +1483,13 @@ mod tests {
                 "a closed mux's conns report the socket gone"
             );
         }
-        assert!(mux.register_conn("cccc", "pwd-ccc").is_err());
+        assert!(mux.register_conn().is_err());
     }
 
     #[test]
     fn close_clears_all_peer_address_routes() {
         let mux = mux();
-        let (_, conn) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn) = register(&mux, "aaaa", "pwd-aaa");
         send_to(&conn, b"outbound", peer());
         assert_eq!(mux.address_map.lock().unwrap().len(), 1);
 
@@ -1501,7 +1516,7 @@ mod tests {
         // A dual-stack mux socket reports IPv4 peers as v4-mapped IPv6; candidates and
         // routes both speak plain IPv4, so the mapping must be undone on the way in.
         let mux = mux();
-        let (_, conn_a) = mux.register_conn("aaaa", "pwd-aaa").unwrap();
+        let (_, conn_a) = register(&mux, "aaaa", "pwd-aaa");
         let v6_mapped: SocketAddr = "[::ffff:192.0.2.1]:40000".parse().unwrap();
 
         mux.route(

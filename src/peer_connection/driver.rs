@@ -11,6 +11,7 @@ use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
+use crate::peer_connection::ice_credentials;
 use crate::peer_connection::transport::tcp_transport::RTCTcpTransport;
 use crate::peer_connection::transport::udp_mux::{UDPMux, UDPMuxConnHandle};
 use crate::peer_connection::transport::{
@@ -538,6 +539,12 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     /// binding `udp_addrs` per connection; see
     /// [`udp_mux`](crate::peer_connection::transport::udp_mux).
     udp_mux: Option<Arc<dyn UDPMux>>,
+    /// ICE credentials the application pinned on the setting engine, when both halves are set.
+    /// Known before any SDP exists, so they are registered with the mux eagerly at first bind —
+    /// a duplicate pinned ufrag then fails `build` the way a failed bind does. Agent-generated
+    /// credentials are registered later, from the local description (see
+    /// [`sync_mux_credentials`](Self::sync_mux_credentials)).
+    mux_pinned_credentials: Option<(String, String)>,
     /// The connection's registration in `udp_mux`, registered once at first bind. On an ICE
     /// restart the same registration gains the new ufrag via `add_ufrag` — its queue and
     /// socket view never change. Kept separately from `udp_sockets`: that map keys the conn by
@@ -574,6 +581,7 @@ where
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         udp_mux: Option<Arc<dyn UDPMux>>,
+        mux_pinned_credentials: Option<(String, String)>,
         mdns_mode: MulticastDnsMode,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -611,6 +619,7 @@ where
             udp_addrs,
             tcp_addrs,
             udp_mux,
+            mux_pinned_credentials,
             mux_conn: None,
             mux_active_ufrag: None,
             mux_ufrag_expiry: VecDeque::new(),
@@ -782,43 +791,37 @@ where
 
         let is_first_bind = self.mux_conn.is_none();
 
-        // Read the connection's *current* ICE credentials from the agent and (re)register
-        // under them. At first bind this is the pair the agent generated; after an ICE restart
-        // it is the freshly rotated pair. Registering from the agent — rather than pinning at
-        // `build()` — is what lets a restart rotate credentials per RFC 8445 while the mux's
-        // routing key tracks the change.
-        let (ufrag, pwd) = {
-            let core = self.inner.core.lock().await;
-            core.local_ice_credentials()
-        };
-
         // Registered only after everything above can no longer fail: `Drop` deregisters only
         // when `mux_conn` is set, so an error between registering and setting it would leave
-        // the ufrag routed to a conn nobody reads.
+        // the conn owned by nobody.
         let conn = match &self.mux_conn {
-            // A rebind (ICE restart) re-uses the existing registration; the credentials have
-            // rotated, so the new ufrag is added alongside the old one (kept for a grace
-            // period) rather than replacing the conn.
-            Some((handle, conn)) => {
-                if self.mux_active_ufrag.as_deref() != Some(ufrag.as_str()) {
-                    mux.add_ufrag(*handle, &ufrag, &pwd)?;
-                    let old = self.mux_active_ufrag.replace(ufrag.clone());
-                    if let Some(old) = old {
-                        self.mux_ufrag_expiry
-                            .push_back((self.inner.runtime.now() + mux.ufrag_grace(), old));
-                    }
-                }
-                conn.clone()
-            }
-            // First bind registers strictly: a duplicate ufrag is a configuration error, and
-            // failing here reports it out of `build()` like a failed socket bind.
+            // A rebind (ICE restart) re-uses the existing registration.
+            Some((_, conn)) => conn.clone(),
             None => {
-                let (handle, conn) = mux.register_conn(&ufrag, &pwd)?;
-                self.mux_active_ufrag = Some(ufrag.clone());
+                let (handle, conn) = mux.register_conn()?;
+                // Credentials pinned on the setting engine are known before any SDP exists, so
+                // they are registered eagerly: a duplicate pinned ufrag then fails `build()`
+                // the way a failed bind does. Agent-generated credentials are only visible in
+                // the local description; `sync_mux_credentials` picks them up at the first
+                // gathering phase, before any inbound check can name the connection.
+                if let Some((ufrag, pwd)) = self.mux_pinned_credentials.clone() {
+                    if let Err(err) = mux.add_ufrag(handle, &ufrag, &pwd) {
+                        // Do not leave the registration behind on failure: `Drop` keys off
+                        // `mux_conn`, which is only set below.
+                        mux.remove_conn(handle);
+                        return Err(err.into());
+                    }
+                    self.mux_active_ufrag = Some(ufrag);
+                }
                 self.mux_conn = Some((handle, conn.clone()));
                 conn
             }
         };
+
+        // A rebind runs on the gathering that follows `set_local_description`, whose
+        // description already carries the current (post-rotation) credentials. At the first
+        // bind there is no local description yet, so this is a no-op there.
+        self.sync_mux_credentials().await?;
 
         if !self.ice_servers.is_empty() {
             // First bind is a configuration problem, say it loudly; a rebind is routine.
@@ -848,6 +851,40 @@ where
         // (see above).
         self.rebuild_gatherers(Vec::new());
 
+        Ok(())
+    }
+
+    /// Register the connection's current ICE credentials with the mux, reading them from the
+    /// local description.
+    ///
+    /// The agent's generated ufrag/pwd are only observable in the SDP the connection produces,
+    /// so the first registration happens at the first gathering phase (every
+    /// `set_local_description` kicks one off), and an ICE restart — applied by
+    /// `set_local_description` before gathering resumes — re-registers under the rotated pair.
+    /// The previous ufrag stays routable for [`UDPMux::ufrag_grace`], so checks from a peer
+    /// that has not yet applied the new SDP still arrive. A no-op when the credentials are
+    /// unchanged, or when no local description exists yet (a connection's first bind).
+    async fn sync_mux_credentials(&mut self) -> Result<()> {
+        let (Some(mux), Some((handle, _))) = (&self.udp_mux, &self.mux_conn) else {
+            return Ok(());
+        };
+        let (handle, mux) = (*handle, Arc::clone(mux));
+        let credentials = {
+            let core = self.inner.core.lock().await;
+            core.local_description().as_ref().and_then(ice_credentials)
+        };
+        let Some((ufrag, pwd)) = credentials else {
+            return Ok(());
+        };
+        if self.mux_active_ufrag.as_deref() == Some(ufrag.as_str()) {
+            return Ok(());
+        }
+        mux.add_ufrag(handle, &ufrag, &pwd)?;
+        let old = self.mux_active_ufrag.replace(ufrag);
+        if let Some(old) = old {
+            self.mux_ufrag_expiry
+                .push_back((self.inner.runtime.now() + mux.ufrag_grace(), old));
+        }
         Ok(())
     }
 
@@ -1231,6 +1268,20 @@ where
                                     error!("Failed to rebind transports for ICE restart: {err}");
                                     return Err(err);
                                 }
+                            }
+                        }
+
+                        // Every gathering follows `set_local_description`, whose description
+                        // carries the connection's current ICE credentials: a muxed
+                        // connection (re)registers under them — the first gather performs the
+                        // first registration, a restarted one the rotation. A no-op for
+                        // unchanged credentials and right after a rebind (which synced).
+                        if matches!(evt, PeerConnectionDriverEvent::IceGathering)
+                            && self.udp_mux.is_some()
+                        {
+                            if let Err(err) = self.sync_mux_credentials().await {
+                                error!("Failed to sync muxed ICE credentials: {err}");
+                                return Err(err);
                             }
                         }
 
