@@ -160,6 +160,11 @@ impl RTCStunGatherer {
     async fn gather_srflx_candidates(&mut self) -> Result<(), Error> {
         // Clone the handle up front so the per-server borrows below stay disjoint.
         let runtime = Arc::clone(&self.runtime);
+
+        // Parse and filter every `stun:` URL before resolving anything, so the
+        // lookups below run concurrently: one slow or hung resolver bounds the
+        // phase by DNS_RESOLUTION_TIMEOUT once instead of stalling it per server.
+        let mut server_addrs = Vec::new();
         for ice_server in &self.ice_servers {
             for raw_url in &ice_server.urls {
                 // RFC 7064 defines no query component for `stun:`, but real-world
@@ -202,35 +207,51 @@ impl RTCStunGatherer {
                     format!("{}:{}", url.host, url.port)
                 };
 
-                // Resolve once per URL, then only create clients for matching families.
-                debug!("Resolving STUN server: {}", server_addr);
-                let resolved_addrs = match runtime.resolve_host(&server_addr).await {
-                    Ok(addrs) => addrs,
-                    Err(err) => {
-                        error!("Failed to resolve STUN server {}: {}", server_addr, err);
-                        continue;
-                    }
-                };
+                server_addrs.push(server_addr);
+            }
+        }
 
-                for local_addr in &self.local_addrs {
-                    match RTCStunGatherer::gather_from_stun_server(
-                        &*runtime,
-                        *local_addr,
-                        &resolved_addrs,
-                    ) {
-                        Ok(Some(stun_client)) => {
-                            self.stun_clients.insert(
-                                FourTuple {
-                                    local_addr: stun_client.local_addr(),
-                                    peer_addr: stun_client.peer_addr(),
-                                },
-                                stun_client,
-                            );
-                        }
-                        Ok(None) => {}
-                        Err(err) => {
-                            error!("Failed to gather stun client: {}", err);
-                        }
+        let resolutions = futures::future::join_all(server_addrs.iter().map(|server_addr| {
+            debug!("Resolving STUN server: {}", server_addr);
+            super::resolve_ice_server(&runtime, server_addr)
+        }))
+        .await;
+
+        for (server_addr, resolution) in server_addrs.iter().zip(resolutions) {
+            let resolved_addrs = match resolution {
+                super::Resolution::Resolved(addrs) => addrs,
+                super::Resolution::Failed(err) => {
+                    error!("Failed to resolve STUN server {}: {}", server_addr, err);
+                    continue;
+                }
+                super::Resolution::TimedOut => {
+                    warn!(
+                        "Timed out resolving STUN server {} after {:?}",
+                        server_addr,
+                        super::DNS_RESOLUTION_TIMEOUT
+                    );
+                    continue;
+                }
+            };
+
+            for local_addr in &self.local_addrs {
+                match RTCStunGatherer::gather_from_stun_server(
+                    &*runtime,
+                    *local_addr,
+                    &resolved_addrs,
+                ) {
+                    Ok(Some(stun_client)) => {
+                        self.stun_clients.insert(
+                            FourTuple {
+                                local_addr: stun_client.local_addr(),
+                                peer_addr: stun_client.peer_addr(),
+                            },
+                            stun_client,
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        error!("Failed to gather stun client: {}", err);
                     }
                 }
             }
@@ -852,5 +873,82 @@ mod tests {
         assert_eq!(drain_events(&mut gatherer), vec![Seen::Complete]);
         assert_eq!(gatherer.state(), RTCIceGatheringState::Complete);
         assert!(gatherer.stun_clients.is_empty());
+    }
+
+    /// A server whose resolution never answers must not stall gathering: its
+    /// lookup is dropped at DNS_RESOLUTION_TIMEOUT and the remaining servers
+    /// gather normally. The virtual clock also proves the lookups ran
+    /// concurrently — serially this gather would take 2s + 5s, not 5s.
+    #[test]
+    fn an_unanswered_resolution_times_out_and_is_skipped() {
+        let runtime = Arc::new(MockRuntime::new());
+        runtime.register_dns_pending("blackhole.test:3478");
+        runtime.register_dns_answer(
+            "slow.test:3478",
+            Duration::from_secs(2),
+            vec!["192.0.2.2:3478".parse().unwrap()],
+        );
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec![
+                    "stun:blackhole.test:3478".to_owned(),
+                    "stun:slow.test:3478".to_owned(),
+                ],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            runtime.clone(),
+        );
+
+        let (result, elapsed) = runtime.block_on_driving_clock(gatherer.gather());
+        result.unwrap();
+
+        let timeout = crate::peer_connection::transport::DNS_RESOLUTION_TIMEOUT;
+        assert!(
+            elapsed >= timeout && elapsed < timeout + Duration::from_secs(1),
+            "concurrent lookups end at the timeout, not at their sum: {elapsed:?}"
+        );
+        assert_eq!(gatherer.stun_clients.len(), 1);
+        let client = gatherer.stun_clients.values().next().unwrap();
+        assert_eq!(
+            client.peer_addr(),
+            "192.0.2.2:3478".parse::<SocketAddr>().unwrap()
+        );
+    }
+
+    /// Two slow servers resolve in parallel: gathering takes the slower of
+    /// the two delays, not their sum.
+    #[test]
+    fn servers_resolve_concurrently() {
+        let runtime = Arc::new(MockRuntime::new());
+        runtime.register_dns_answer(
+            "a.test:3478",
+            Duration::from_secs(2),
+            vec!["192.0.2.2:3478".parse().unwrap()],
+        );
+        runtime.register_dns_answer(
+            "b.test:3478",
+            Duration::from_secs(3),
+            vec!["192.0.2.3:3478".parse().unwrap()],
+        );
+        let mut gatherer = RTCStunGatherer::new(
+            vec!["192.0.2.1:5000".parse().unwrap()],
+            vec![RTCIceServer {
+                urls: vec!["stun:a.test:3478".to_owned(), "stun:b.test:3478".to_owned()],
+                ..Default::default()
+            }],
+            RTCIceTransportPolicy::All,
+            runtime.clone(),
+        );
+
+        let (result, elapsed) = runtime.block_on_driving_clock(gatherer.gather());
+        result.unwrap();
+
+        assert!(
+            elapsed >= Duration::from_secs(3) && elapsed < Duration::from_secs(4),
+            "parallel lookups take the slower delay, not the sum: {elapsed:?}"
+        );
+        assert_eq!(gatherer.stun_clients.len(), 2);
     }
 }

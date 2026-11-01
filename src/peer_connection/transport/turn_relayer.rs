@@ -3,7 +3,7 @@
 use crate::runtime::Runtime;
 use log::{debug, error, trace, warn};
 use rtc::crypto::RTCCryptoProvider;
-use rtc::ice::url::SchemeType;
+use rtc::ice::url::{SchemeType, Url as IceUrl};
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::{
@@ -207,8 +207,23 @@ impl RTCTurnRelayer {
         // Clone the handle up front so the per-server borrows below stay disjoint.
         let runtime = Arc::clone(&self.runtime);
 
+        // Parse and filter every TURN URL before resolving anything, so the lookups
+        // below run concurrently: one slow or hung resolver bounds the phase by
+        // DNS_RESOLUTION_TIMEOUT once instead of stalling it per server. A server
+        // entry whose URLs do not validate (e.g. a `turn:` URL without credentials)
+        // skips that entry — it must not abort gathering for the remaining servers.
+        let mut servers: Vec<(IceUrl, String)> = vec![];
         for ice_server in &self.ice_servers {
-            let urls = ice_server.urls()?;
+            let urls = match ice_server.urls() {
+                Ok(urls) => urls,
+                Err(err) => {
+                    warn!(
+                        "Skipping ICE server with invalid urls {:?}: {}",
+                        ice_server.urls, err
+                    );
+                    continue;
+                }
+            };
 
             for url in urls {
                 if !matches!(url.scheme, SchemeType::Turn | SchemeType::Turns) {
@@ -225,69 +240,91 @@ impl RTCTurnRelayer {
                     continue;
                 }
 
-                let turn_server_addr = format!("{}:{}", url.host, url.port);
-                let resolved_addrs = match runtime.resolve_host(&turn_server_addr).await {
-                    Ok(addrs) => addrs,
-                    Err(err) => {
-                        error!(
-                            "Failed to resolve TURN server {}: {}",
-                            turn_server_addr, err
-                        );
-                        continue;
-                    }
+                servers.push((url.clone(), format!("{}:{}", url.host, url.port)));
+            }
+        }
+
+        let resolutions = futures::future::join_all(
+            servers
+                .iter()
+                .map(|(_, server_addr)| super::resolve_ice_server(&runtime, server_addr)),
+        )
+        .await;
+
+        for ((url, turn_server_addr), resolution) in servers.iter().zip(resolutions) {
+            let resolved_addrs = match resolution {
+                super::Resolution::Resolved(addrs) => addrs,
+                super::Resolution::Failed(err) => {
+                    error!(
+                        "Failed to resolve TURN server {}: {}",
+                        turn_server_addr, err
+                    );
+                    continue;
+                }
+                super::Resolution::TimedOut => {
+                    warn!(
+                        "Timed out resolving TURN server {} after {:?}",
+                        turn_server_addr,
+                        super::DNS_RESOLUTION_TIMEOUT
+                    );
+                    continue;
+                }
+            };
+
+            for local_addr in &self.local_addrs {
+                let Some(peer_addr) = resolved_addrs
+                    .iter()
+                    .copied()
+                    .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
+                else {
+                    debug!(
+                        "TURN server {} has no address matching {}'s family, skipping",
+                        turn_server_addr, local_addr
+                    );
+                    continue;
                 };
 
-                for local_addr in &self.local_addrs {
-                    let Some(peer_addr) = resolved_addrs
-                        .iter()
-                        .copied()
-                        .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
-                    else {
-                        continue;
-                    };
-
-                    let four_tuple = FourTuple {
-                        local_addr: *local_addr,
-                        peer_addr,
-                    };
-                    if self.clients.contains_key(&four_tuple) {
-                        continue;
-                    }
-
-                    let mut client = TurnClient::new(
-                        TurnClientConfig {
-                            stun_serv_addr: peer_addr.to_string(),
-                            turn_serv_addr: peer_addr.to_string(),
-                            local_addr: *local_addr,
-                            transport_protocol: TransportProtocol::UDP,
-                            username: url.username.clone(),
-                            password: url.password.clone(),
-                            realm: String::new(),
-                            software: String::new(),
-                            rto_in_ms: 0,
-                            allocation_refresh_interval_cap: self.allocation_refresh_interval_cap,
-                        },
-                        Arc::clone(&self.crypto_provider),
-                    )?;
-
-                    let allocate_tid = client.allocate(self.runtime.now())?;
-                    debug!(
-                        "TURN allocation started from {} to {} via {}",
-                        local_addr, peer_addr, url
-                    );
-
-                    self.clients.insert(
-                        four_tuple,
-                        ManagedTurnClient {
-                            client,
-                            url: url.to_string(),
-                            allocate_tid,
-                            local_addr: *local_addr,
-                            relay_addr: None,
-                            gather_finished: false,
-                        },
-                    );
+                let four_tuple = FourTuple {
+                    local_addr: *local_addr,
+                    peer_addr,
+                };
+                if self.clients.contains_key(&four_tuple) {
+                    continue;
                 }
+
+                let mut client = TurnClient::new(
+                    TurnClientConfig {
+                        stun_serv_addr: peer_addr.to_string(),
+                        turn_serv_addr: peer_addr.to_string(),
+                        local_addr: *local_addr,
+                        transport_protocol: TransportProtocol::UDP,
+                        username: url.username.clone(),
+                        password: url.password.clone(),
+                        realm: String::new(),
+                        software: String::new(),
+                        rto_in_ms: 0,
+                        allocation_refresh_interval_cap: self.allocation_refresh_interval_cap,
+                    },
+                    Arc::clone(&self.crypto_provider),
+                )?;
+
+                let allocate_tid = client.allocate(self.runtime.now())?;
+                debug!(
+                    "TURN allocation started from {} to {} via {}",
+                    local_addr, peer_addr, url
+                );
+
+                self.clients.insert(
+                    four_tuple,
+                    ManagedTurnClient {
+                        client,
+                        url: url.to_string(),
+                        allocate_tid,
+                        local_addr: *local_addr,
+                        relay_addr: None,
+                        gather_finished: false,
+                    },
+                );
             }
         }
 
@@ -1197,5 +1234,90 @@ mod tests {
             )
             .unwrap();
         });
+    }
+
+    /// A server entry whose URLs fail validation — a `turn:` URL without
+    /// credentials — is skipped, not fatal: the remaining entries still
+    /// gather. It used to abort the whole gather, leaving no relay candidates
+    /// from any entry.
+    #[test]
+    fn gather_skips_an_entry_whose_urls_fail_validation() {
+        futures::executor::block_on(async {
+            let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+            let valid_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3478);
+            let mut relayer = RTCTurnRelayer::new(
+                vec![local_addr],
+                vec![
+                    RTCIceServer {
+                        urls: vec!["turn:127.0.0.1:3479?transport=udp".to_owned()],
+                        ..Default::default()
+                    },
+                    RTCIceServer {
+                        urls: vec![format!("turn:{}?transport=udp", valid_addr)],
+                        username: "user".to_owned(),
+                        credential: "pass".to_owned(),
+                    },
+                ],
+                RTCIceTransportPolicy::Relay,
+                None,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+            );
+
+            relayer
+                .gather()
+                .await
+                .expect("an invalid entry must not abort the gather");
+            assert_eq!(relayer.clients.len(), 1);
+            let request = relayer
+                .poll_write()
+                .expect("Allocate request for the valid entry");
+            assert_eq!(request.transport.peer_addr, valid_addr);
+        });
+    }
+
+    /// Same bound as the STUN gatherer: a TURN server whose resolution never
+    /// answers is skipped at DNS_RESOLUTION_TIMEOUT while a resolvable server
+    /// allocates normally.
+    #[cfg(feature = "runtime-mock")]
+    #[test]
+    fn an_unanswered_resolution_times_out_and_is_skipped() {
+        let runtime = Arc::new(crate::runtime::MockRuntime::new());
+        runtime.register_dns_pending("blackhole.test:3478");
+        let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+        let valid_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3478);
+        let mut relayer = RTCTurnRelayer::new(
+            vec![local_addr],
+            vec![
+                RTCIceServer {
+                    urls: vec!["turn:blackhole.test:3478?transport=udp".to_owned()],
+                    username: "user".to_owned(),
+                    credential: "pass".to_owned(),
+                },
+                RTCIceServer {
+                    urls: vec![format!("turn:{}?transport=udp", valid_addr)],
+                    username: "user".to_owned(),
+                    credential: "pass".to_owned(),
+                },
+            ],
+            RTCIceTransportPolicy::Relay,
+            None,
+            runtime.clone(),
+            rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
+        );
+
+        let (result, elapsed) = runtime.block_on_driving_clock(relayer.gather());
+        result.expect("gather completes despite the pending resolution");
+
+        let timeout = crate::peer_connection::transport::DNS_RESOLUTION_TIMEOUT;
+        assert!(
+            elapsed >= timeout && elapsed < timeout + Duration::from_secs(1),
+            "the pending lookup ends at the timeout: {elapsed:?}"
+        );
+        assert_eq!(relayer.clients.len(), 1);
+        let request = relayer
+            .poll_write()
+            .expect("Allocate request for the resolved server");
+        assert_eq!(request.transport.peer_addr, valid_addr);
     }
 }

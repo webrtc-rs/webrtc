@@ -59,6 +59,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ICE server hostnames resolve concurrently, with a per-server timeout, and one invalid
+  TURN server entry no longer aborts the gather** (surfaced by
+  [live777#499](https://github.com/binbat/live777/issues/499)). Both gatherers resolved server
+  hostnames one at a time with no bound, so a slow or black-holed resolver stalled gathering —
+  and the driver loop running it — unboundedly, and N slow servers cost N times the delay.
+  Resolutions now run concurrently, each capped at a 5 s `DNS_RESOLUTION_TIMEOUT` (literal
+  addresses still resolve inline, so no timer is built outside a reactor context), and a STUN
+  or TURN server that never answers is skipped with a warning while the rest gather normally.
+  Separately, `RTCTurnRelayer::gather` propagated `RTCIceServer::urls()` validation errors, so
+  one entry that fails validation — a `turn:` URL without credentials, a malformed URL — cost
+  the relay candidates of *every* entry; the entry is now skipped, matching the STUN
+  gatherer's per-URL behavior. `MockRuntime` grows DNS hooks (delayed and never-answering
+  resolutions) so this is tested on virtual time.
 -
 
 ### Security

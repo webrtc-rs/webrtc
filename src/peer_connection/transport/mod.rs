@@ -57,6 +57,47 @@ pub(crate) mod turn_relayer;
 /// Plain single-datagram UDP receive buffer size (no GRO coalescing).
 pub(crate) const UDP_RECV_BUF_LEN: usize = 2000;
 
+/// Upper bound on one ICE server hostname resolution during gathering.
+///
+/// Gathering resolves every STUN/TURN server before it can start the
+/// transactions, and the resolver itself is unbounded (a black-holed resolver
+/// answers never). Capping each lookup keeps the whole phase bounded: all
+/// servers resolve concurrently, so a stuck server costs this once — not once
+/// per server — and the remaining servers gather normally.
+pub(crate) const DNS_RESOLUTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The outcome of one ICE server hostname resolution.
+pub(crate) enum Resolution {
+    Resolved(Vec<SocketAddr>),
+    Failed(io::Error),
+    TimedOut,
+}
+
+/// Resolve one ICE server `host:port`, bounded by [`DNS_RESOLUTION_TIMEOUT`].
+///
+/// Literal addresses are answered inline without the timer: they never reach
+/// DNS, and building the timer would need a reactor context that mock-driven
+/// tests deliberately do not have.
+pub(crate) async fn resolve_ice_server(
+    runtime: &std::sync::Arc<dyn crate::runtime::Runtime>,
+    server_addr: &str,
+) -> Resolution {
+    if let Ok(addr) = server_addr.parse::<SocketAddr>() {
+        return Resolution::Resolved(vec![addr]);
+    }
+    match crate::runtime::timeout(
+        &**runtime,
+        DNS_RESOLUTION_TIMEOUT,
+        runtime.resolve_host(server_addr),
+    )
+    .await
+    {
+        Ok(Ok(addrs)) => Resolution::Resolved(addrs),
+        Ok(Err(err)) => Resolution::Failed(err),
+        Err(_) => Resolution::TimedOut,
+    }
+}
+
 /// Upper bound on the number of datagrams the kernel may coalesce into one UDP GRO
 /// receive (`UDP_SEGMENT`/GRO cap is 64 per buffer).
 pub(crate) const MAX_GRO_SEGMENTS: usize = 64;
