@@ -498,34 +498,55 @@ impl Association {
             let bytes_sent = Arc::clone(&bytes_sent);
             let name2 = Arc::clone(&name);
             let done2 = Arc::clone(&done);
-            let mut buffer = None;
-            for raw in packets {
-                let mut buf = buffer
-                    .take()
-                    .unwrap_or_else(|| BytesMut::with_capacity(16 * 1024));
 
-                // We do the marshalling work in a blocking task here for a reason:
-                // If we don't tokio tends to run the write_loop and read_loop of one connection on the same OS thread
-                // This means that even though we release the lock above, the read_loop isn't able to take it, simply because it is not being scheduled by tokio
-                // Doing it this way, tokio schedules this work on a dedicated blocking thread, this future is suspended, and the read_loop can make progress
-                match tokio::task::spawn_blocking(move || raw.marshal_to(&mut buf).map(|_| buf))
-                    .await
-                {
-                    Ok(Ok(mut buf)) => {
-                        let raw = buf.as_ref();
-                        if let Err(err) = net_conn.send(raw.as_ref()).await {
-                            log::warn!("[{name2}] failed to write packets on net_conn: {err}");
-                            done2.store(true, Ordering::Relaxed)
-                        } else {
-                            bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+            // We do the marshalling work in a blocking task here for a reason:
+            // If we don't tokio tends to run the write_loop and read_loop of one connection on the same OS thread
+            // This means that even though we release the lock above, the read_loop isn't able to take it, simply because it is not being scheduled by tokio
+            // Doing it this way, tokio schedules this work on a dedicated blocking thread, this future is suspended, and the read_loop can make progress
+            //
+            // One blocking task marshals the whole gathered batch, in order, rather than one task per
+            // packet: the write loop still suspends into the blocking pool once per wakeup, which is
+            // what lets the read loop run, while a batch of n packets costs one pool round trip
+            // instead of n. The packets are sent in the order they were gathered.
+            if !packets.is_empty() {
+                let marshalled = tokio::task::spawn_blocking(move || {
+                    // `marshal_to` pads and checksums relative to an empty writer, so each packet
+                    // is marshalled into an empty buffer: `split` hands a packet off and keeps the
+                    // rest of the allocation for the next one, and a failed packet's partial bytes
+                    // are cleared.
+                    let mut buf = BytesMut::with_capacity(16 * 1024);
+                    packets
+                        .iter()
+                        .map(|raw| match raw.marshal_to(&mut buf) {
+                            Ok(_) => Ok(buf.split().freeze()),
+                            Err(err) => {
+                                buf.clear();
+                                Err(err)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .await;
+                match marshalled {
+                    Ok(marshalled) => {
+                        for packet in marshalled {
+                            match packet {
+                                Ok(raw) => {
+                                    if let Err(err) = net_conn.send(raw.as_ref()).await {
+                                        log::warn!(
+                                            "[{name2}] failed to write packets on net_conn: {err}"
+                                        );
+                                        done2.store(true, Ordering::Relaxed)
+                                    } else {
+                                        bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+                                    }
+                                }
+                                Err(err) => {
+                                    log::warn!("[{name2}] failed to serialize a packet: {err:?}");
+                                }
+                            }
+                            //log::debug!("[{}] sending {} bytes done", name, raw.len());
                         }
-
-                        // Reuse allocation. Have to use options, since spawn blocking can't borrow, has to take ownership.
-                        buf.clear();
-                        buffer = Some(buf);
-                    }
-                    Ok(Err(err)) => {
-                        log::warn!("[{name2}] failed to serialize a packet: {err:?}");
                     }
                     Err(err) => {
                         if err.is_cancelled() {
@@ -538,7 +559,6 @@ impl Association {
                         }
                     }
                 }
-                //log::debug!("[{}] sending {} bytes done", name, raw.len());
             }
 
             if !continue_loop {

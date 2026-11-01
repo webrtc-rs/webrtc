@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Marshal each batch of packets from `gather_outbound` in one `spawn_blocking` instead of one per packet, cutting the write loop's blocking-pool round trips (and the pool's lock contention) by the batch size; packet order and the read loop's fairness are unchanged [#941](https://github.com/webrtc-rs/webrtc/pull/941)
 * Expose the association MTU (SCTP packet size budget) in `Config` as `mtu`; 0 keeps the default. Allows matching the real path MTU on networks where the default is wrong in either direction [#754](https://github.com/webrtc-rs/webrtc/issues/754) [#806](https://github.com/webrtc-rs/webrtc/issues/806)
 * Lower `INITIAL_MTU` from 1228 to 1191, matching libwebrtc's `kMaxSafeMTUSize`, so the worst-case wire packet fits 1280 byte paths (the IPv6 minimum MTU and the tunnel MTU of WireGuard-family VPNs). With no PMTUD, the old value made delivery of full-size DATA chunks depend on IP fragmentation surviving the path, stalling the association forever where it does not [#806](https://github.com/webrtc-rs/webrtc/issues/806)
 * Use the new algorithm in crc crate for better throughput [#569](https://github.com/webrtc-rs/webrtc/pull/569)
