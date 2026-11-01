@@ -14,11 +14,11 @@ util = { workspace = true, default-features = false, features = ["conn"] }
 
 byteorder = "1"
 rand_core = "0.6"
-p256 = { version = "0.13", features = ["default", "ecdh", "ecdsa"] }
-p384 = "0.13"
+p256 = { version = "0.14", features = ["default", "ecdh", "ecdsa", "getrandom"] }
+p384 = { version = "0.14", features = ["ecdh", "getrandom"] }
 rand = "0.9"
 hmac = "0.12"
-sec1 = { version = "0.7", features = ["std"] }
+sec1 = { version = "0.8", features = ["std"] }
 sha1 = "0.10"
 sha2 = "0.10"
 aes = "0.8"
