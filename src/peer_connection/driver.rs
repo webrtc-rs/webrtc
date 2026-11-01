@@ -1950,6 +1950,25 @@ where
         }
 
         // 1.b turn_relayer poll_write()
+        self.flush_turn_relayer_writes().await;
+
+        // 1.c peer_connection poll_write() - Send all outgoing packets, coalescing
+        // consecutive same-destination datagrams into single UDP GSO syscalls.
+        let writes = Self::drain_core_writes(self.inner.clone()).await;
+        self.flush_writes(writes).await;
+
+        // 1.d turn_relayer poll_write() again: 1.c hands every TURN-relayed packet to the
+        // relayer (`handle_write` -> `turn_relayer.handle_write`), which only queues it. Send
+        // it now, not on the driver's next wake-up, which on a quiet connection can be a
+        // keepalive or a report away.
+        self.flush_turn_relayer_writes().await;
+
+        Ok(())
+    }
+
+    /// Sends everything the TURN relayer has queued: its own requests (allocations,
+    /// permissions, refreshes) and the packets relayed through it.
+    async fn flush_turn_relayer_writes(&mut self) {
         while let Some(msg) = self.turn_relayer.poll_write() {
             let four_tuple: FourTuple = FourTuple::from(&msg.transport);
             if let Err(err) = self.handle_write(msg).await {
@@ -1968,13 +1987,6 @@ where
                 }
             }
         }
-
-        // 1.c peer_connection poll_write() - Send all outgoing packets, coalescing
-        // consecutive same-destination datagrams into single UDP GSO syscalls.
-        let writes = Self::drain_core_writes(self.inner.clone()).await;
-        self.flush_writes(writes).await;
-
-        Ok(())
     }
 
     /// Send a drained batch of outgoing packets, coalescing maximal runs of
