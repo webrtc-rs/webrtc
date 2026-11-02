@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use rand::Rng;
 
-use super::flight2::*;
+use super::flight4::*;
 use super::*;
 use crate::config::*;
 use crate::conn::*;
@@ -174,7 +174,11 @@ impl Flight for Flight0 {
                 };
             }
 
-            Ok(Box::new(Flight2 {}))
+            // Skip HelloVerifyRequest/cookie verification and send the
+            // ServerHello flight directly. RFC 6347 allows a server to skip
+            // HVR; the extra cookie round-trip is what stalls Chrome's
+            // browser-to-node DTLS-SRTP handshake against this stack.
+            Ok(Box::new(Flight4 {}))
         } else {
             Err((
                 Some(Alert {
