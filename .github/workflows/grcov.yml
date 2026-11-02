@@ -58,6 +58,8 @@ jobs:
       - name: Generate coverage data
         id: grcov
         run: |
+          # RTC is a separate repository with its own coverage. Including its
+          # submodule records lets Codecov merge them into this wrapper's paths.
           grcov . \
               --binary-path ./target/debug/ \
               --source-dir . \
@@ -67,6 +69,7 @@ jobs:
               --ignore='/**' \
               --ignore='C:/**' \
               --ignore='../**' \
+              --ignore='rtc/**' \
               --ignore-not-existing \
               --excl-line "#\\[derive\\(" \
               --excl-br-line "#\\[derive\\(" \
