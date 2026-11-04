@@ -1246,6 +1246,18 @@ impl PeerConnection for PeerConnectionImpl {
     }
 
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
+        let mut passive_tcp_candidates = Vec::new();
+        if let Ok(parsed) = desc.unmarshal() {
+            for a in parsed.media_descriptions.iter().flat_map(|m| &m.attributes) {
+                if a.is_ice_candidate()
+                    && let Some(val) = &a.value
+                    && val.to_ascii_lowercase().contains("tcptype passive")
+                    && let Ok(c) = rtc::ice::candidate::unmarshal_candidate(val)
+                {
+                    passive_tcp_candidates.push(c);
+                }
+            }
+        }
         {
             let mut core = self.inner.core.lock().await;
             // An answerer is never told a restart is coming: it just receives a description
@@ -1259,6 +1271,16 @@ impl PeerConnection for PeerConnectionImpl {
             }
 
             core.set_remote_description(self.inner.runtime.now(), desc)?;
+        }
+        for candidate in passive_tcp_candidates {
+            // overflow: awaited — producer is the application in `set_remote_description`.
+            let _ = self
+                .inner
+                .driver_event_tx
+                .send(PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(
+                    candidate,
+                ))
+                .await;
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
         // descriptions are set, set_remote_description triggers start_transports
