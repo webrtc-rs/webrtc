@@ -41,7 +41,7 @@ thiserror = "1"
 portable-atomic = "1.6"
 
 [target.'cfg(not(windows))'.dependencies]
-nix = "0.26.2"
+nix = { version = "0.26.2", default-features = false, features = ["net"] }
 libc = "0.2.126"
 
 [target.'cfg(windows)'.dependencies]
