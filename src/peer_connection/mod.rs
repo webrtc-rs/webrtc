@@ -53,7 +53,7 @@ pub(crate) mod driver;
 pub mod transport;
 
 use crate::peer_connection::transport::{SctpTransport, SctpTransportImpl};
-use log::error;
+use log::{error, warn};
 use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
@@ -72,12 +72,15 @@ use driver::{
 };
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
+use rtc::ice::candidate::Candidate;
 use rtc::ice::mdns::MulticastDnsMode;
+use rtc::ice::tcp_type::TcpType;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::rtp_transceiver::{RTCRtpTransceiverId, RTCRtpTransceiverInit};
 use rtc::sansio::Protocol;
+use rtc::sdp::description::session::ATTR_KEY_INACTIVE;
 use rtc::shared::error::{Error, Result};
 pub use rtc::statistics::StatsSelector;
 pub use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
@@ -902,6 +905,36 @@ fn will_restart_ice(core: &RTCPeerConnection, desc: &RTCSessionDescription) -> b
     ufrag != current_ufrag || pwd != current_pwd
 }
 
+/// Whether `c` is a passive ICE-TCP candidate, the only kind this side dials.
+fn is_tcp_passive(c: &Candidate) -> bool {
+    c.network_type().is_tcp() && c.tcp_type() == TcpType::Passive
+}
+
+/// The passive ICE-TCP candidates carried in a remote description's `a=candidate` lines.
+///
+/// The core learns these candidates while applying the description but never reports them
+/// back, and the driver only dials what it is told about — so without this, a peer that puts
+/// its candidates in the SDP instead of trickling them is never dialed over TCP (webrtc#920).
+///
+/// Follows the core's own rules (`extract_ice_details`): candidates on an `inactive` m-line are
+/// ignored. Anything that does not parse is skipped rather than reported, because by the time
+/// this runs the core has already accepted the description.
+fn remote_tcp_passive_candidates(desc: &RTCSessionDescription) -> Vec<Candidate> {
+    let Ok(parsed) = desc.unmarshal() else {
+        return Vec::new();
+    };
+    parsed
+        .media_descriptions
+        .iter()
+        .filter(|m| m.attribute(ATTR_KEY_INACTIVE).is_none())
+        .flat_map(|m| m.attributes.iter())
+        .filter(|a| a.is_ice_candidate())
+        .filter_map(|a| a.value.as_deref())
+        .filter_map(|value| rtc::ice::candidate::unmarshal_candidate(value).ok())
+        .filter(is_tcp_passive)
+        .collect()
+}
+
 /// Number of coalesced (driver-behind) sends between cooperative yields in
 /// [`PeerConnectionRef::wake_writes`]. Roughly the batch the sender stuffs into
 /// the SCTP buffer per driver wake; sized to amortise the wake without letting
@@ -1246,6 +1279,7 @@ impl PeerConnection for PeerConnectionImpl {
     }
 
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
+        let tcp_passive;
         {
             let mut core = self.inner.core.lock().await;
             // An answerer is never told a restart is coming: it just receives a description
@@ -1258,7 +1292,23 @@ impl PeerConnection for PeerConnectionImpl {
                 self.inner.mark_ice_restart_rebind_pending();
             }
 
+            // Read before `desc` moves into the core; acted on only once the core accepts it, so
+            // a rejected description never triggers a dial.
+            tcp_passive = remote_tcp_passive_candidates(&desc);
             core.set_remote_description(self.inner.runtime.now(), desc)?;
+        }
+        for c in tcp_passive {
+            // overflow: awaited — producer is the application in `set_remote_description`.
+            if let Err(err) = self
+                .inner
+                .driver_event_tx
+                .send(PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(c))
+                .await
+            {
+                // The driver is gone, so the connection is closed; the description itself is
+                // already applied, which is what the caller asked for.
+                warn!("Failed to hand remote TCP passive candidate to the driver: {err:?}");
+            }
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
         // descriptions are set, set_remote_description triggers start_transports
@@ -1297,8 +1347,7 @@ impl PeerConnection for PeerConnectionImpl {
             None => candidate.candidate.as_str(),
         };
         if let Ok(c) = rtc::ice::candidate::unmarshal_candidate(candidate_str)
-            && c.network_type().is_tcp()
-            && c.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
+            && is_tcp_passive(&c)
         {
             // overflow: awaited — producer is the application in `add_ice_candidate`.
             self.inner
@@ -1707,6 +1756,71 @@ mod tests {
                 .expect("driver event channel should not be closed");
             assert!(matches!(event, PeerConnectionDriverEvent::WriteNotify));
         }));
+    }
+
+    fn remote_offer(media: &str) -> RTCSessionDescription {
+        let sdp = format!(
+            "v=0\r\n\
+             o=- 0 0 IN IP4 127.0.0.1\r\n\
+             s=-\r\n\
+             t=0 0\r\n\
+             {media}"
+        );
+        RTCSessionDescription::offer(sdp).unwrap()
+    }
+
+    const APP_M_LINE: &str = "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n\
+         c=IN IP4 0.0.0.0\r\n\
+         a=ice-ufrag:abcd\r\n\
+         a=ice-pwd:abcdefghijklmnopqrstuvwx\r\n\
+         a=mid:0\r\n";
+
+    // webrtc#920: a peer that puts its candidates in the SDP instead of trickling them must
+    // still be dialed, and only its passive TCP candidates are dialable.
+    #[test]
+    fn remote_tcp_passive_candidates_keeps_only_passive_tcp() {
+        let desc = remote_offer(&format!(
+            "{APP_M_LINE}\
+             a=candidate:1 1 udp 2130706431 10.0.0.1 5000 typ host\r\n\
+             a=candidate:2 1 tcp 1671430143 10.0.0.1 9 typ host tcptype active\r\n\
+             a=candidate:3 1 tcp 1671430143 10.0.0.1 5001 typ host tcptype passive\r\n\
+             a=candidate:4 1 tcp 1671430143 10.0.0.1 5002 typ host tcptype so\r\n"
+        ));
+
+        let found = remote_tcp_passive_candidates(&desc);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].address(), "10.0.0.1");
+        assert_eq!(found[0].port(), 5001);
+        assert_eq!(found[0].tcp_type(), TcpType::Passive);
+    }
+
+    #[test]
+    fn remote_tcp_passive_candidates_ignores_inactive_m_line() {
+        let desc = remote_offer(&format!(
+            "{APP_M_LINE}\
+             a=inactive\r\n\
+             a=candidate:1 1 tcp 1671430143 10.0.0.1 5001 typ host tcptype passive\r\n"
+        ));
+
+        assert!(remote_tcp_passive_candidates(&desc).is_empty());
+    }
+
+    #[test]
+    fn remote_tcp_passive_candidates_skips_malformed_candidate() {
+        let desc = remote_offer(&format!(
+            "{APP_M_LINE}\
+             a=candidate:garbage\r\n\
+             a=candidate:3 1 tcp 1671430143 10.0.0.1 5001 typ host tcptype passive\r\n"
+        ));
+
+        let found = remote_tcp_passive_candidates(&desc);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].port(), 5001);
+    }
+
+    #[test]
+    fn remote_tcp_passive_candidates_empty_without_candidates() {
+        assert!(remote_tcp_passive_candidates(&remote_offer(APP_M_LINE)).is_empty());
     }
 }
 

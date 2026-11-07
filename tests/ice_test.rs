@@ -828,3 +828,99 @@ fn test_ice_tcp_only_connection() {
         task_b.abort();
     });
 }
+
+// webrtc#920: a TCP-only peer that does not trickle — every candidate travels inside the SDP,
+// as with WHIP or any full-SDP signaling — must still be dialed. Before the fix only
+// `add_ice_candidate` triggered the active TCP dial, so this pair stayed in `Checking`.
+#[test]
+fn test_ice_tcp_only_connection_without_trickle() {
+    block_on(async {
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
+            .try_init()
+            .ok();
+
+        let (a_gathered_tx, mut a_gathered_rx) = channel::<()>(1);
+        let (b_gathered_tx, mut b_gathered_rx) = channel::<()>(1);
+        let (a_connected_tx, mut a_connected_rx) = channel::<()>(1);
+        let (b_connected_tx, mut b_connected_rx) = channel::<()>(1);
+
+        struct TestHandler {
+            gathered_tx: Sender<()>,
+            connected_tx: Sender<()>,
+        }
+
+        #[async_trait::async_trait]
+        impl PeerConnectionEventHandler for TestHandler {
+            // Candidates are deliberately not forwarded: the SDP carries them.
+            async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+                if state == RTCIceGatheringState::Complete {
+                    let _ = self.gathered_tx.try_send(());
+                }
+            }
+
+            async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+                if state == RTCPeerConnectionState::Connected {
+                    let _ = self.connected_tx.try_send(());
+                }
+            }
+        }
+
+        let build = |gathered_tx, connected_tx| async move {
+            let mut media_engine = MediaEngine::default();
+            media_engine.register_default_codecs().unwrap();
+            PeerConnectionBuilder::new()
+                .with_media_engine(media_engine)
+                .with_handler(Arc::new(TestHandler {
+                    gathered_tx,
+                    connected_tx,
+                }))
+                .with_tcp_addrs(vec!["127.0.0.1:0"])
+                .with_udp_addrs(Vec::<&str>::new()) // Force TCP only
+                .build()
+                .await
+                .unwrap()
+        };
+        let pc_a = build(a_gathered_tx, a_connected_tx).await;
+        let pc_b = build(b_gathered_tx, b_connected_tx).await;
+
+        let _dc_a = pc_a.create_data_channel("test-tcp", None).await.unwrap();
+
+        let offer = pc_a.create_offer(None).await.unwrap();
+        pc_a.set_local_description(offer).await.unwrap();
+        timeout(Duration::from_secs(5), a_gathered_rx.recv())
+            .await
+            .expect("offerer ICE gathering did not complete");
+        let offer = pc_a.local_description().await.unwrap();
+        assert!(
+            offer.sdp.contains("tcptype passive"),
+            "offer must carry a passive TCP candidate:\n{}",
+            offer.sdp
+        );
+        pc_b.set_remote_description(offer).await.unwrap();
+
+        let answer = pc_b.create_answer(None).await.unwrap();
+        pc_b.set_local_description(answer).await.unwrap();
+        timeout(Duration::from_secs(5), b_gathered_rx.recv())
+            .await
+            .expect("answerer ICE gathering did not complete");
+        let answer = pc_b.local_description().await.unwrap();
+        assert!(
+            answer.sdp.contains("tcptype passive"),
+            "answer must carry a passive TCP candidate:\n{}",
+            answer.sdp
+        );
+        pc_a.set_remote_description(answer).await.unwrap();
+
+        timeout(Duration::from_secs(10), async {
+            let _ = a_connected_rx.recv().await;
+            let _ = b_connected_rx.recv().await;
+        })
+        .await
+        .expect("TCP-only peers exchanging full SDP (no trickle) never connected");
+
+        pc_a.close().await.unwrap();
+        pc_b.close().await.unwrap();
+    });
+}

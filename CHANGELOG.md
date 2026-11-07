@@ -62,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - STUN Binding requests sent while gathering server-reflexive candidates now use a random
   transaction ID instead of an all-zero one, as RFC 8489 section 5 requires
   ([rtc#283](https://github.com/webrtc-rs/rtc/issues/283)).
+- Active ICE-TCP now dials passive TCP candidates carried in the remote description, not only
+  trickled ones, so peers that do not trickle (full-SDP or WHIP-style signaling) and are limited
+  to TCP connect instead of staying in `Checking`
+  ([webrtc#920](https://github.com/webrtc-rs/webrtc/issues/920)). A remote address is dialed at
+  most once per transport generation, so a candidate seen both in the SDP and via
+  `add_ice_candidate`, or repeated in a renegotiation, opens no extra stream.
 
 ### Security
 
