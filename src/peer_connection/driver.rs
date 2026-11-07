@@ -2204,6 +2204,76 @@ mod tests {
     use crate::data_channel::RTCDataChannelMessage;
     use crate::runtime::channel;
 
+    #[cfg(any(feature = "crypto-ring", feature = "crypto-aws-lc-rs"))]
+    #[test]
+    fn a_local_open_cannot_overtake_registration_of_its_event_receiver() {
+        use crate::peer_connection::{
+            PeerConnection, PeerConnectionImpl, new_test_peer_connection,
+        };
+        use crate::runtime::{Mutex, default_runtime};
+        use futures::FutureExt;
+
+        let runtime = default_runtime().expect("test requires a runtime feature");
+        runtime.block_on(Box::pin(async {
+            let (inner, _events) = new_test_peer_connection().await;
+            let connection = PeerConnectionImpl {
+                inner: inner.clone(),
+                driver_handle: Mutex::new(None),
+                driver_stopped: Mutex::new(None),
+                dedicated_reactor: false,
+            };
+            let mut driver = PeerConnectionDriver::<SocketAddr>::new(
+                inner.clone(),
+                vec![],
+                vec![],
+                MulticastDnsMode::Disabled,
+                vec![],
+                RTCIceTransportPolicy::All,
+                rtc::crypto::default_provider().unwrap(),
+                false,
+                None,
+            );
+
+            // Pause registration while another driver task observes the local
+            // channel's Open event. Neither side relies on wall-clock timing.
+            let registration = inner.data_channel_events_tx.lock().await;
+            let mut creating = Box::pin(connection.create_data_channel("local", None));
+            assert!(creating.as_mut().now_or_never().is_none());
+
+            let mut opening = Box::pin(async {
+                loop {
+                    let exists = inner.core.lock().await.data_channel(0).is_some();
+                    if exists {
+                        break;
+                    }
+                    futures_lite::future::yield_now().await;
+                }
+                driver
+                    .handle_rtc_event(RTCPeerConnectionEvent::OnDataChannel(
+                        RTCDataChannelEvent::OnOpen(0),
+                    ))
+                    .await;
+            });
+            assert!(opening.as_mut().now_or_never().is_none());
+            drop(registration);
+
+            // Give an already-produced Open event its turn before resuming
+            // the caller that is registering the receiver.
+            let opened_early = opening.as_mut().now_or_never().is_some();
+            let channel = creating.await.unwrap();
+            if !opened_early {
+                opening.await;
+            }
+            assert!(
+                matches!(
+                    channel.poll().now_or_never(),
+                    Some(Some(DataChannelEvent::OnOpen))
+                ),
+                "the caller's receiver must retain its local channel's Open event"
+            );
+        }));
+    }
+
     #[test]
     fn insert_data_channel_event_sender_replaces_closed_sender() {
         let mut map: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> = HashMap::new();

@@ -1358,21 +1358,22 @@ impl PeerConnection for PeerConnectionImpl {
         label: &str,
         options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<dyn DataChannel>> {
-        // Create the data channel via the core
+        let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+        // Take both locks before mutating the core: cancellation while registration is
+        // blocked must not leave an orphan, and the driver must not announce OnOpen
+        // before the local caller's recipient is registered. Driver dispatch releases
+        // the core lock before acquiring the event registry.
         let channel_id = {
+            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
             let mut core = self.inner.core.lock().await;
             let rtc_dc = core.create_data_channel(label, options)?;
-            rtc_dc.id()
-        };
-
-        let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
-        {
-            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
+            let channel_id = rtc_dc.id();
             // Racing a `close()` that has already ended the streams: leave this one ended too.
             if !self.inner.is_closing() {
                 data_channels.insert(channel_id, evt_tx);
             }
-        }
+            channel_id
+        };
 
         self.inner.wake_writes().await;
 
@@ -1706,6 +1707,32 @@ mod tests {
                 .expect("driver should be woken within 1s")
                 .expect("driver event channel should not be closed");
             assert!(matches!(event, PeerConnectionDriverEvent::WriteNotify));
+        }));
+    }
+
+    #[test]
+    fn cancelling_channel_creation_cannot_leave_an_unregistered_core_channel() {
+        use futures::FutureExt;
+
+        let runtime = default_runtime().expect("test requires a runtime feature");
+        runtime.block_on(Box::pin(async {
+            let (inner, _events) = new_test_peer_connection().await;
+            let connection = PeerConnectionImpl {
+                inner: inner.clone(),
+                driver_handle: Mutex::new(None),
+                driver_stopped: Mutex::new(None),
+                dedicated_reactor: false,
+            };
+            let registration = inner.data_channel_events_tx.lock().await;
+            let mut creating = Box::pin(connection.create_data_channel("cancelled", None));
+            assert!(creating.as_mut().now_or_never().is_none());
+            drop(creating);
+            drop(registration);
+
+            assert!(
+                inner.core.lock().await.data_channel(0).is_none(),
+                "a cancelled caller must not leave a channel the driver can announce as incoming"
+            );
         }));
     }
 }
