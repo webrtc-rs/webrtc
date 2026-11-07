@@ -59,7 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
--
+- STUN Binding requests sent while gathering server-reflexive candidates now use a random
+  transaction ID instead of an all-zero one, as RFC 8489 section 5 requires
+  ([rtc#283](https://github.com/webrtc-rs/rtc/issues/283)).
 
 ### Security
 
