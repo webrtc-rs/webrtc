@@ -521,10 +521,16 @@ impl DataChannel for DataChannelImpl {
             }
             {
                 let mut peer_connection = self.inner.core.lock().await;
-                let outstanding = peer_connection
+                let dc = peer_connection
                     .data_channel(self.id)
-                    .ok_or(Error::ErrDataChannelClosed)?
-                    .outstanding_bytes();
+                    .ok_or(Error::ErrDataChannelClosed)?;
+                if matches!(
+                    dc.ready_state(),
+                    RTCDataChannelState::Closing | RTCDataChannelState::Closed
+                ) {
+                    return Err(Error::ErrDataChannelClosed);
+                }
+                let outstanding = dc.outstanding_bytes();
                 // Below the limit ⇒ writable. An empty buffer (`0 < limit`) also passes, so
                 // a lone message larger than the limit can still be sent rather than
                 // blocking forever.
@@ -550,6 +556,12 @@ impl DataChannel for DataChannelImpl {
             let mut dc = peer_connection
                 .data_channel(self.id)
                 .ok_or(Error::ErrDataChannelClosed)?;
+            if matches!(
+                dc.ready_state(),
+                RTCDataChannelState::Closing | RTCDataChannelState::Closed
+            ) {
+                return Err(Error::ErrDataChannelClosed);
+            }
             let outstanding = dc.outstanding_bytes();
             // Reject once the message would push outstanding bytes past the limit — but
             // always admit onto an empty buffer, so a lone message larger than the limit can
@@ -576,6 +588,12 @@ impl DataChannel for DataChannelImpl {
             let mut dc = peer_connection
                 .data_channel(self.id)
                 .ok_or(Error::ErrDataChannelClosed)?;
+            if matches!(
+                dc.ready_state(),
+                RTCDataChannelState::Closing | RTCDataChannelState::Closed
+            ) {
+                return Err(Error::ErrDataChannelClosed);
+            }
             let outstanding = dc.outstanding_bytes();
             if outstanding != 0 && outstanding.saturating_add(text.len()) > limit {
                 return Err(Error::ErrSendBufferFull);
@@ -780,6 +798,168 @@ mod tests {
                     .await
                     .contains_key(&channel_id)
             );
+        }));
+    }
+    async fn bounded_channel() -> (DataChannelImpl, Arc<PeerConnectionRef>) {
+        use crate::peer_connection::new_test_peer_connection;
+        use crate::runtime::channel;
+        use rtc::peer_connection::RTCPeerConnectionBuilder;
+        use rtc::peer_connection::transport::{
+            CandidateConfig, CandidateHostConfig, RTCIceCandidate,
+        };
+        use rtc::sansio::Protocol;
+
+        let mut now = std::time::Instant::now();
+        let mut sender = RTCPeerConnectionBuilder::new().build(now).unwrap();
+        let mut recipient = RTCPeerConnectionBuilder::new().build(now).unwrap();
+        let sender_addr = "127.0.0.1:49100".parse::<std::net::SocketAddr>().unwrap();
+        let recipient_addr = "127.0.0.1:49101".parse::<std::net::SocketAddr>().unwrap();
+        for (peer, address) in [(&mut sender, sender_addr), (&mut recipient, recipient_addr)] {
+            let candidate = CandidateHostConfig {
+                base_config: CandidateConfig {
+                    network: "udp".to_owned(),
+                    address: address.ip().to_string(),
+                    port: address.port(),
+                    component: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .new_candidate_host()
+            .unwrap();
+            peer.add_local_candidate(RTCIceCandidate::from(&candidate).to_json().unwrap())
+                .unwrap();
+        }
+        let options = RTCDataChannelInit {
+            negotiated: Some(1),
+            ..Default::default()
+        };
+        let id = sender
+            .create_data_channel("bounded", Some(options.clone()))
+            .unwrap()
+            .id();
+        let remote_id = recipient
+            .create_data_channel("bounded", Some(options))
+            .unwrap()
+            .id();
+        let offer = sender.create_offer(None).unwrap();
+        sender.set_local_description(now, offer.clone()).unwrap();
+        recipient.set_remote_description(now, offer).unwrap();
+        let answer = recipient.create_answer(None).unwrap();
+        recipient
+            .set_local_description(now, answer.clone())
+            .unwrap();
+        sender.set_remote_description(now, answer).unwrap();
+
+        for _ in 0..1000 {
+            sender.handle_timeout(now).unwrap();
+            recipient.handle_timeout(now).unwrap();
+            while let Some(mut packet) = sender.poll_write() {
+                std::mem::swap(
+                    &mut packet.transport.local_addr,
+                    &mut packet.transport.peer_addr,
+                );
+                recipient.handle_read(packet).unwrap();
+            }
+            while let Some(mut packet) = recipient.poll_write() {
+                std::mem::swap(
+                    &mut packet.transport.local_addr,
+                    &mut packet.transport.peer_addr,
+                );
+                sender.handle_read(packet).unwrap();
+            }
+            while sender.poll_event().is_some() {}
+            while recipient.poll_event().is_some() {}
+            if sender.data_channel(id).unwrap().ready_state() == RTCDataChannelState::Open
+                && recipient.data_channel(remote_id).unwrap().ready_state()
+                    == RTCDataChannelState::Open
+            {
+                let (mut inner, _driver_events) = new_test_peer_connection().await;
+                Arc::get_mut(&mut inner)
+                    .unwrap()
+                    .data_channel_send_buffer_limit = 8;
+                *inner.core.lock().await = sender;
+                let (_events, receiver) = channel(1);
+                return (DataChannelImpl::new(id, inner.clone(), receiver), inner);
+            }
+            now += Duration::from_millis(10);
+        }
+        panic!("in-memory negotiated channels must open");
+    }
+
+    #[test]
+    fn closing_a_retained_channel_releases_blocked_senders() {
+        use crate::runtime::default_runtime;
+
+        let runtime = default_runtime().unwrap();
+        runtime.block_on(Box::pin(async {
+            let (channel, inner) = bounded_channel().await;
+            channel
+                .send(BytesMut::from(&b"admitted"[..]))
+                .await
+                .unwrap();
+            assert_eq!(channel.outstanding_bytes().await.unwrap(), 8);
+            let mut writable = Box::pin(channel.writable());
+            let mut binary = Box::pin(channel.send(BytesMut::from(&b"x"[..])));
+            let mut text = Box::pin(channel.send_text("x"));
+            assert!(writable.as_mut().now_or_never().is_none());
+            assert!(binary.as_mut().now_or_never().is_none());
+            assert!(text.as_mut().now_or_never().is_none());
+            let mut cancelled = Box::pin(channel.send_text("cancelled"));
+            assert!(cancelled.as_mut().now_or_never().is_none());
+            drop(cancelled);
+            assert_eq!(channel.outstanding_bytes().await.unwrap(), 8);
+
+            channel.close().await.unwrap();
+            assert!(inner.core.lock().await.data_channel(channel.id()).is_some());
+            // Reproduce the driver's capacity notification without running it:
+            // the core and its unacknowledged bytes must remain unchanged.
+            inner.data_channel_backpressure.notify_waiters();
+            assert!(matches!(
+                writable.as_mut().now_or_never(),
+                Some(Err(Error::ErrDataChannelClosed))
+            ));
+            assert!(matches!(
+                binary.as_mut().now_or_never(),
+                Some(Err(Error::ErrDataChannelClosed))
+            ));
+            assert!(matches!(
+                text.as_mut().now_or_never(),
+                Some(Err(Error::ErrDataChannelClosed))
+            ));
+            assert_eq!(channel.outstanding_bytes().await.unwrap(), 8);
+        }));
+    }
+
+    #[test]
+    fn a_closed_retained_channel_rejects_try_sends_before_buffer_admission() {
+        use crate::runtime::default_runtime;
+
+        let runtime = default_runtime().unwrap();
+        runtime.block_on(Box::pin(async {
+            let (channel, _inner) = bounded_channel().await;
+            channel
+                .send(BytesMut::from(&b"admitted"[..]))
+                .await
+                .unwrap();
+            assert!(matches!(
+                channel.try_send(BytesMut::from(&b"x"[..])).await,
+                Err(Error::ErrSendBufferFull)
+            ));
+            assert!(matches!(
+                channel.try_send_text("x").await,
+                Err(Error::ErrSendBufferFull)
+            ));
+            channel.close().await.unwrap();
+            assert!(matches!(
+                channel.try_send(BytesMut::from(&b"x"[..])).await,
+                Err(Error::ErrDataChannelClosed)
+            ));
+            assert!(matches!(
+                channel.try_send_text("x").await,
+                Err(Error::ErrDataChannelClosed)
+            ));
+            assert_eq!(channel.outstanding_bytes().await.unwrap(), 8);
         }));
     }
 }
