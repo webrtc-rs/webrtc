@@ -312,7 +312,7 @@ impl RTCStunGatherer {
 
         // Create STUN binding request
         let mut msg = StunMessage::new();
-        msg.build(&[Box::<TransactionId>::default(), Box::new(BINDING_REQUEST)])?;
+        msg.build(&[Box::new(TransactionId::new()), Box::new(BINDING_REQUEST)])?;
 
         // Send the request
         stun_client.handle_write(TaggedMessage { now, message: msg })?;
@@ -496,6 +496,27 @@ mod tests {
                 assert_eq!(Some(request.transport.peer_addr), expected);
             }
         }
+    }
+
+    #[test]
+    fn binding_requests_use_random_transaction_ids() {
+        let runtime = MockRuntime::new();
+        let local: SocketAddr = "192.0.2.1:5000".parse().unwrap();
+        let server: SocketAddr = "192.0.2.2:3478".parse().unwrap();
+
+        let transaction_id = || {
+            let mut client = RTCStunGatherer::gather_from_stun_server(&runtime, local, &[server])
+                .unwrap()
+                .expect("STUN client created");
+            let request = client.poll_write().expect("binding request queued");
+            // RFC 8489 section 5: the 96-bit transaction ID follows the 4-byte magic cookie.
+            request.message[8..20].to_vec()
+        };
+
+        let first = transaction_id();
+        let second = transaction_id();
+        assert_ne!(first, [0u8; 12]);
+        assert_ne!(first, second);
     }
 
     #[test]
