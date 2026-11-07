@@ -2,7 +2,8 @@
 //! objects an application reads through.
 //!
 //! Two layers share this module. Below: the plumbing that moves bytes — see `stun_gatherer`,
-//! `tcp_transport`, `turn_relayer` and the GRO/GSO constants, all crate-private. Above:
+//! `tcp_transport`, `turn_relayer` and the GRO/GSO constants, all crate-private, plus the
+//! public [`udp_mux`] (many connections sharing one UDP socket). Above:
 //! [`SctpTransport`], [`DtlsTransport`] and [`IceTransport`], the public handles mirroring the
 //! W3C interfaces of the same names.
 //!
@@ -53,6 +54,8 @@ use std::net::SocketAddr;
 pub(crate) mod stun_gatherer;
 pub(crate) mod tcp_transport;
 pub(crate) mod turn_relayer;
+
+pub mod udp_mux;
 
 /// Plain single-datagram UDP receive buffer size (no GRO coalescing).
 pub(crate) const UDP_RECV_BUF_LEN: usize = 2000;
@@ -120,6 +123,9 @@ pub(crate) enum SocketRecvResult {
         stride: usize,
         local_addr: SocketAddr,
         peer_addr: SocketAddr,
+        /// The datagram's destination IP from packet info, where the platform supplies it.
+        /// Consulted only for muxed conns, whose socket's bound address names no interface.
+        dst_ip: Option<std::net::IpAddr>,
         idx: usize,
         buf: Vec<u8>,
     },

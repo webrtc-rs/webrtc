@@ -58,6 +58,7 @@ clap = { version = "4.6.1", features = ["derive"] }
 anyhow = "1.0.103"
 ctrlc = "3.5.2"
 serde_json = "1.0.150"
+serde = { version = "1.0.228", features = ["derive"] }
 hyper = { version = "0.14.32", features = ["full"] }
 rand = "0.10.1"
 base64 = "0.22.1"
@@ -273,4 +274,9 @@ required-features = ["runtime-tokio"]
 [[example]]
 name = "stats"
 path = "examples/stats/stats.rs"
+bench = false
+
+[[example]]
+name = "udp-mux"
+path = "examples/udp-mux/udp-mux.rs"
 bench = false
