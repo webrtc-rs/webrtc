@@ -43,7 +43,7 @@ use rtc::shared::ifaces::ifaces;
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::io::IoSliceMut;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
@@ -475,6 +475,21 @@ fn is_link_local(ip: &IpAddr) -> bool {
     }
 }
 
+/// Decides whether a remote passive ICE-TCP candidate should be dialed, recording it if so.
+///
+/// Returns the address to dial, or `None` when the candidate's address is not an IP literal
+/// (the same parse [`RTCTcpTransport::connect`] does) or was already dialed in this transport
+/// generation. One candidate can reach the driver from the remote description and again from
+/// `add_ice_candidate` or a renegotiation, and only the first delivery may open a stream.
+fn should_dial_tcp_passive(
+    dialed: &mut HashSet<SocketAddr>,
+    candidate: &Candidate,
+) -> Option<SocketAddr> {
+    let ip = candidate.address().parse::<IpAddr>().ok()?;
+    let addr = SocketAddr::new(ip, candidate.port());
+    dialed.insert(addr).then_some(addr)
+}
+
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum PeerConnectionDriverEvent {
@@ -500,6 +515,10 @@ pub(crate) struct PeerConnectionDriver<A = SocketAddr> {
     stun_gatherer: RTCStunGatherer,
     turn_relayer: RTCTurnRelayer,
     tcp_transport: RTCTcpTransport,
+    /// Remote passive ICE-TCP addresses already dialed in this transport generation; a candidate
+    /// arriving both in the SDP and by trickle, or again in a renegotiation SDP, must not open a
+    /// second stream.
+    dialed_tcp_passive: HashSet<SocketAddr>,
     mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     udp_sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
     /// Reused scratch buffer for concatenating a run of same-destination datagrams
@@ -585,6 +604,7 @@ where
             udp_sockets: HashMap::new(),
             gso_scratch: Vec::new(),
             tcp_transport: RTCTcpTransport::new(HashMap::new()),
+            dialed_tcp_passive: HashSet::new(),
             ice_gathering_active: false,
             stun_gathering_complete: false,
             turn_gathering_complete: false,
@@ -640,6 +660,7 @@ where
         self.udp_sockets.clear();
         self.mdns_socket = None;
         self.tcp_transport = RTCTcpTransport::new(HashMap::new());
+        self.dialed_tcp_passive.clear();
 
         if self.mdns_mode != MulticastDnsMode::Disabled {
             self.mdns_socket = Some(runtime.wrap_udp_socket(MulticastSocket::new().into_std()?)?);
@@ -1748,11 +1769,19 @@ where
                 }
             }
             PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(candidate) => {
-                RTCTcpTransport::connect(
-                    &candidate,
-                    self.inner.runtime.clone(),
-                    self.inner.driver_event_tx.clone(),
-                );
+                if should_dial_tcp_passive(&mut self.dialed_tcp_passive, &candidate).is_some() {
+                    RTCTcpTransport::connect(
+                        &candidate,
+                        self.inner.runtime.clone(),
+                        self.inner.driver_event_tx.clone(),
+                    );
+                } else {
+                    trace!(
+                        "Skipping TCP connect to {}:{}: not an IP literal or already dialed",
+                        candidate.address(),
+                        candidate.port()
+                    );
+                }
             }
             PeerConnectionDriverEvent::IncomingTcpStream(four_tuple, stream) => {
                 trace!("TCP stream connection established: {:?}", four_tuple);
@@ -2549,5 +2578,42 @@ mod tests {
             MAX_UNREGISTERED_PENDING_DATA_CHANNEL_EVENTS,
             pending.get(&0).map(|q| q.len()).unwrap_or(0)
         );
+    }
+
+    fn tcp_passive(addr: &str, port: u16) -> Candidate {
+        rtc::ice::candidate::unmarshal_candidate(&format!(
+            "1 1 tcp 2128609279 {addr} {port} typ host tcptype passive"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn should_dial_tcp_passive_dials_each_address_once() {
+        let mut dialed = HashSet::new();
+        let c = tcp_passive("127.0.0.1", 5000);
+
+        assert_eq!(
+            should_dial_tcp_passive(&mut dialed, &c),
+            Some("127.0.0.1:5000".parse().unwrap())
+        );
+        // The same candidate again, e.g. trickled after it was already in the SDP.
+        assert_eq!(should_dial_tcp_passive(&mut dialed, &c), None);
+        // A different port on the same host is a different candidate.
+        assert_eq!(
+            should_dial_tcp_passive(&mut dialed, &tcp_passive("127.0.0.1", 5001)),
+            Some("127.0.0.1:5001".parse().unwrap())
+        );
+
+        // A new transport generation forgets what was dialed.
+        dialed.clear();
+        assert!(should_dial_tcp_passive(&mut dialed, &c).is_some());
+    }
+
+    #[test]
+    fn should_dial_tcp_passive_skips_non_ip_address() {
+        let mut dialed = HashSet::new();
+        let c = tcp_passive("4f1c9e2a-0d5b-4a7e-9c3f-1b2d3e4f5a6b.local", 5000);
+        assert_eq!(should_dial_tcp_passive(&mut dialed, &c), None);
+        assert!(dialed.is_empty());
     }
 }
