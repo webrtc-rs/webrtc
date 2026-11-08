@@ -529,6 +529,31 @@ pub mod mock;
 #[cfg(feature = "runtime-mock")]
 pub use mock::{MockRuntime, MockUDPNetwork};
 
+/// Is Nagle off on this process's socket with that local address? Read from the socket
+/// itself rather than from the code that was supposed to set it.
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) fn nagle_is_off(local_addr: SocketAddr) -> bool {
+    use std::os::fd::{BorrowedFd, RawFd};
+
+    for entry in std::fs::read_dir("/proc/self/fd").expect("/proc/self/fd is readable") {
+        let Ok(entry) = entry else { continue };
+        let Ok(fd) = entry.file_name().to_string_lossy().parse::<RawFd>() else {
+            continue;
+        };
+        // SAFETY: borrowed for this check only, and nothing here closes or consumes it.
+        let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
+        let socket = socket2::SockRef::from(&borrowed);
+        // Not a socket, or not bound: not the one being looked for.
+        let Ok(Some(bound)) = socket.local_addr().map(|addr| addr.as_socket()) else {
+            continue;
+        };
+        if bound == local_addr {
+            return socket.tcp_nodelay().unwrap_or(false);
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod default_impl_tests {
     //! Cover the `AsyncUdpSocket` DEFAULT method bodies (`send_to` / `recv_from` and the
