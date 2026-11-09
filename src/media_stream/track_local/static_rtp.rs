@@ -43,7 +43,7 @@ use crate::media_stream::Track;
 use crate::media_stream::track_local::{TrackLocal, TrackLocalContext, TrackLocalEvent};
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::{Mutex, Receiver};
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use rtc::media_stream::{
     MediaStreamId, MediaStreamTrack, MediaStreamTrackId, MediaStreamTrackState,
     MediaTrackCapabilities, MediaTrackConstraints, MediaTrackSettings,
@@ -53,7 +53,7 @@ use rtc::rtp_transceiver::{RtpStreamId, SSRC};
 use rtc::shared::error::flatten_errs;
 use rtc::shared::marshal::{Marshal, MarshalSize};
 use rtc::{rtcp, rtp};
-use std::collections::HashMap;
+use std::borrow::Cow;
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
@@ -76,58 +76,62 @@ impl TrackLocalStaticRTP {
     }
 
     /// Writes an RTP packet to the track with the specified header extensions.
+    ///
+    /// Each extension goes out under the id negotiated for its URI at the time the packet is
+    /// sent; an extension the remote did not negotiate is left out of the packet.
     pub async fn write_rtp_with_extensions(
         &self,
-        mut pkt: rtp::Packet,
+        pkt: rtp::Packet,
         extensions: &[rtp::extension::HeaderExtension],
     ) -> Result<()> {
         let mut write_errs = vec![];
 
-        // Prepare the extensions data
-        let extension_data: HashMap<_, _> = extensions
+        let extension_data = extensions
             .iter()
             .flat_map(|extension| {
-                let buf = {
-                    let mut buf = BytesMut::with_capacity(extension.marshal_size());
-                    buf.resize(extension.marshal_size(), 0);
-                    if let Err(err) = extension.marshal_to(&mut buf) {
-                        write_errs.push(err);
-                        return None;
-                    }
-
-                    buf.freeze()
-                };
-
-                Some((extension.uri(), buf))
+                let mut buf = BytesMut::zeroed(extension.marshal_size());
+                if let Err(err) = extension.marshal_to(&mut buf) {
+                    write_errs.push(err);
+                    return None;
+                }
+                Some((extension.uri(), buf.freeze()))
             })
             .collect();
 
-        {
-            let ctx = self.ctx.lock().await;
-            if let Some(ctx) = &*ctx {
-                for (uri, data) in extension_data.iter() {
-                    if let Some(id) = ctx
-                        .rtp_parameters
-                        .header_extensions
-                        .iter()
-                        .find(|ext| &ext.uri == uri)
-                        .map(|ext| ext.id)
-                        && let Err(err) = pkt.header.set_extension(id as u8, data.clone())
-                    {
-                        write_errs.push(err);
-                        continue;
-                    }
-                }
-            } else {
-                return Err(Error::ErrBindFailed);
-            }
+        if self.ctx.lock().await.is_none() {
+            return Err(Error::ErrBindFailed);
         }
 
-        if let Err(err) = self.write_rtp(pkt).await {
+        if let Err(err) = self.send_rtp(pkt, extension_data).await {
             write_errs.push(err);
         }
 
         flatten_errs(write_errs)
+    }
+
+    /// Hands a packet and the header extensions to add to it to the driver.
+    async fn send_rtp(
+        &self,
+        packet: rtp::Packet,
+        extensions: Vec<(Cow<'static, str>, Bytes)>,
+    ) -> Result<()> {
+        let ctx_opt = self.ctx.lock().await;
+        if let Some(ctx) = &*ctx_opt {
+            let tx = ctx.driver_event_tx.clone();
+            let rtp_sender_id = ctx.rtp_sender_id;
+            drop(ctx_opt);
+            // overflow: awaited — producer is the application in `write_rtp`. Blocking
+            // the sender is the outbound back-pressure mechanism, not a failure mode.
+            tx.send(PeerConnectionDriverEvent::SenderRtp(
+                rtp_sender_id,
+                packet,
+                extensions,
+            ))
+            .await
+            .map_err(|e| Error::Other(format!("{:?}", e)))
+        } else {
+            Err(Error::Other("track is not binding yet".to_string()))
+        }
     }
 }
 
@@ -247,19 +251,7 @@ impl TrackLocal for TrackLocalStaticRTP {
     }
 
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {
-        let ctx_opt = self.ctx.lock().await;
-        if let Some(ctx) = &*ctx_opt {
-            let tx = ctx.driver_event_tx.clone();
-            let rtp_sender_id = ctx.rtp_sender_id;
-            drop(ctx_opt);
-            // overflow: awaited — producer is the application in `write_rtp`. Blocking
-            // the sender is the outbound back-pressure mechanism, not a failure mode.
-            tx.send(PeerConnectionDriverEvent::SenderRtp(rtp_sender_id, packet))
-                .await
-                .map_err(|e| Error::Other(format!("{:?}", e)))
-        } else {
-            Err(Error::Other("track is not binding yet".to_string()))
-        }
+        self.send_rtp(packet, Vec::new()).await
     }
 
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()> {

@@ -48,7 +48,6 @@ use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::{Receiver, Sender};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::rtp_transceiver::RTCRtpSenderId;
-use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
 
 /// Events that can occur on a [`TrackLocal`] (a track we send).
@@ -76,7 +75,6 @@ pub mod static_sample;
 #[derive(Clone)]
 pub struct TrackLocalContext {
     pub(crate) rtp_sender_id: RTCRtpSenderId,
-    pub(crate) rtp_parameters: RTCRtpParameters,
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
 }
 
