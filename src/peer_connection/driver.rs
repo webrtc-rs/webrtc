@@ -22,7 +22,7 @@ use crate::runtime::{
     AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, RecvMeta, Sender, Transmit,
     TrySendError, channel,
 };
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -42,6 +42,7 @@ use rtc::shared::error::{Error, Result};
 use rtc::shared::ifaces::ifaces;
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -478,7 +479,9 @@ fn is_link_local(ip: &IpAddr) -> bool {
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum PeerConnectionDriverEvent {
-    SenderRtp(RTCRtpSenderId, rtp::Packet),
+    /// An RTP packet to send, with header extensions to add by URI and marshalled value. Those
+    /// not negotiated for the sender are left out.
+    SenderRtp(RTCRtpSenderId, rtp::Packet, Vec<(Cow<'static, str>, Bytes)>),
     SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtcp::Packet>>),
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
     RemoteIceTcpPassiveCandidate(Candidate),
@@ -1647,9 +1650,23 @@ where
         // One instant for the whole event: everything this dispatches is caused by it.
         let now = self.inner.runtime.now();
         match evt {
-            PeerConnectionDriverEvent::SenderRtp(sender_id, packet) => {
+            PeerConnectionDriverEvent::SenderRtp(sender_id, mut packet, extensions) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
+                    // Ids are looked up now, not when the track was bound: a track added before
+                    // the remote description only knew provisional ids, which negotiation may
+                    // reassign to other extensions.
+                    let negotiated = &sender.get_parameters().rtp_parameters.header_extensions;
+                    for (uri, payload) in extensions {
+                        if let Some(id) = negotiated
+                            .iter()
+                            .find(|extension| extension.uri == uri)
+                            .map(|extension| extension.id)
+                            && let Err(err) = packet.header.set_extension(id as u8, payload)
+                        {
+                            error!("Failed to set RTP header extension {}: {}", uri, err);
+                        }
+                    }
                     if let Err(err) = sender.write_rtp(now, packet) {
                         error!("Failed to send RTP: {}", err);
                     }

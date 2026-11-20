@@ -245,13 +245,9 @@ impl RtpTransceiverImpl {
     ///   keeps the sender it had rather than being left with none.
     pub(crate) async fn set_sender(&self, rtp_sender: Option<Arc<dyn RtpSender>>) -> Result<()> {
         let pc = self.peer_connection()?;
-        let rtp_sender = match rtp_sender {
-            Some(rtp_sender) => {
-                let params = rtp_sender.get_parameters().await?;
-                Some((rtp_sender, params))
-            }
-            None => None,
-        };
+        if let Some(rtp_sender) = &rtp_sender {
+            rtp_sender.get_parameters().await?;
+        }
 
         let mut sender = self.sender.lock().await;
 
@@ -261,7 +257,7 @@ impl RtpTransceiverImpl {
             old_sender.track().unbind().await;
         }
 
-        if let Some((rtp_sender, params)) = rtp_sender {
+        if let Some(rtp_sender) = rtp_sender {
             // Wire an event channel so RTCP feedback the remote sends about this track
             // (Receiver Reports, PLI/FIR) can be read via `TrackLocal::poll`. The driver
             // routes inbound RTCP tagged with this track id to `evt_tx`.
@@ -279,7 +275,6 @@ impl RtpTransceiverImpl {
                 .bind(
                     TrackLocalContext {
                         rtp_sender_id: self.id.into(),
-                        rtp_parameters: params.rtp_parameters,
                         driver_event_tx: pc.driver_event_tx.clone(),
                     },
                     evt_rx,
