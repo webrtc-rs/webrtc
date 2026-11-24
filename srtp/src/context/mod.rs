@@ -181,27 +181,34 @@ impl Context {
         self.srtcp_ssrc_states.entry(ssrc).or_insert(s)
     }
 
-    /// roc returns SRTP rollover counter value of specified SSRC.
-    fn get_roc(&self, ssrc: u32) -> Option<u32> {
+    /// roc returns SRTP rollover counter value of specified SSRC, or None if
+    /// the context has not seen the SSRC.
+    pub fn get_roc(&self, ssrc: u32) -> Option<u32> {
         self.srtp_ssrc_states
             .get(&ssrc)
             .map(|s| (s.index >> 16) as _)
     }
 
-    /// set_roc sets SRTP rollover counter value of specified SSRC.
-    fn set_roc(&mut self, ssrc: u32, roc: u32) {
+    /// set_roc sets SRTP rollover counter value of specified SSRC. The
+    /// sequence number of the next packet completes the packet index (RFC
+    /// 3711 section 3.3.1). This lets a new context carry on a stream from the
+    /// rollover counter of the one it replaces (in another process, say), or
+    /// from one signalled out of band.
+    pub fn set_roc(&mut self, ssrc: u32, roc: u32) {
         let state = self.get_srtp_ssrc_state(ssrc);
         state.index = (roc as u64) << 16;
         state.rollover_has_processed = false;
     }
 
-    /// index returns SRTCP index value of specified SSRC.
-    fn get_index(&self, ssrc: u32) -> Option<usize> {
+    /// index returns the SRTCP index last used to encrypt an RTCP packet of
+    /// specified SSRC, or None if the context has not seen the SSRC.
+    pub fn get_index(&self, ssrc: u32) -> Option<usize> {
         self.srtcp_ssrc_states.get(&ssrc).map(|s| s.srtcp_index)
     }
 
-    /// set_index sets SRTCP index value of specified SSRC.
-    fn set_index(&mut self, ssrc: u32, index: usize) {
+    /// set_index sets SRTCP index value of specified SSRC: the next RTCP
+    /// packet encrypted for it uses the index after this one.
+    pub fn set_index(&mut self, ssrc: u32, index: usize) {
         self.get_srtcp_ssrc_state(ssrc).srtcp_index = index % (MAX_SRTCP_INDEX + 1);
     }
 }

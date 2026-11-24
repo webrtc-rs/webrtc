@@ -249,6 +249,43 @@ fn test_rtp_burst_loss_with_set_roc() -> Result<()> {
 }
 
 #[test]
+fn test_rtp_carried_on_with_set_roc() -> Result<()> {
+    // A stream past a rollover, carried on by new contexts from the old
+    // ones' rollover counters: they encrypt and decrypt as the old ones.
+    let mut old_encrypt = build_test_context()?;
+    let mut old_decrypt = build_test_context()?;
+    let mut new_encrypt = build_test_context()?;
+    let mut new_decrypt = build_test_context()?;
+
+    for i in 0xfff0u32..0x10010u32 {
+        let pkt = rtp::packet::Packet {
+            header: rtp::header::Header {
+                version: 2,
+                ssrc: 1,
+                sequence_number: i as u16,
+                ..Default::default()
+            },
+            payload: vec![(i >> 8) as u8, i as u8].into(),
+        };
+        let raw = pkt.marshal()?;
+        let enc = old_encrypt.encrypt_rtp(&raw)?;
+        assert_eq!(old_decrypt.decrypt_rtp(&enc)?, raw);
+        if i < 0x10008 {
+            continue;
+        }
+        if i == 0x10008 {
+            assert_eq!(old_encrypt.get_roc(1), Some(1));
+            new_encrypt.set_roc(1, old_encrypt.get_roc(1).unwrap());
+            new_decrypt.set_roc(1, old_decrypt.get_roc(1).unwrap());
+        }
+        assert_eq!(new_encrypt.encrypt_rtp(&raw)?, enc);
+        assert_eq!(new_decrypt.decrypt_rtp(&enc)?, raw);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_decrypt_invalid_srtp() -> Result<()> {
     let mut decrypt_context = build_test_context()?;
 
