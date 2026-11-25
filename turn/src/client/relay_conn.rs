@@ -67,6 +67,8 @@ pub struct RelayConnInternal<T: 'static + RelayConnObserver + Send + Sync> {
     integrity: MessageIntegrity,
     nonce: Nonce,
     lifetime: Duration,
+    /// The server answered a refresh with 437: it no longer holds the allocation.
+    allocation_lost: bool,
 }
 
 /// `RelayConn` is the implementation of the Conn interfaces for UDP Relayed network connections.
@@ -205,6 +207,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             integrity: config.integrity,
             nonce: config.nonce,
             lifetime: config.lifetime,
+            allocation_lost: false,
         }
     }
 
@@ -505,7 +508,10 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 self.set_nonce_from_msg(&res);
                 return Err(Error::ErrTryAgain);
             } else {
-                return Ok(());
+                if code.code == CODE_ALLOC_MISMATCH {
+                    self.allocation_lost = true;
+                }
+                return Err(Error::Other(format!("{} (error {})", res.typ, code)));
             }
         }
 
@@ -588,6 +594,9 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayConnInternal<T> {
     async fn on_timeout(&mut self, id: TimerIdRefresh) {
         log::debug!("refresh timer {id:?} expired");
+        if self.allocation_lost {
+            return;
+        }
         match id {
             TimerIdRefresh::Alloc => {
                 let lifetime = self.lifetime;
@@ -602,8 +611,8 @@ impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayCo
                         }
                     }
                 }
-                if result.is_err() {
-                    log::warn!("refresh allocation failed");
+                if let Err(err) = result {
+                    log::warn!("refresh allocation failed: {err}");
                 }
             }
             TimerIdRefresh::Perms => {
